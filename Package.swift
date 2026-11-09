@@ -2,5 +2,11 @@
 import PackageDescription
 
 let package = Package(
-    name: "LaserScriptKit"
+    name: "LaserScriptKit",
+    products: [
+        .library(name: "LaserScriptKit", targets: ["LaserScriptKit"]),
+    ],
+    targets: [
+        .target(name: "LaserScriptKit"),
+    ]
 )
