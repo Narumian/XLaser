@@ -45,3 +45,9 @@ For each read, the host must provide:
 - `frameLength`: the desired number of output points for that read.
 
 Both values are hints. The asset is not required to produce exactly `frameLength` points. The host is responsible for any final adjustment required by the output.
+
+## Output
+
+The host provides a reusable output buffer for the asset to write into. The output represents 3D shapes before projection, with semantics aligned with XLive's `Laser3DStream`.
+
+The output supports a variable number of shapes and vertices. `frameLength` is a hint, not a strict output limit.
