@@ -36,3 +36,12 @@ MyEffect.ls/
 └── resources/
     └── ...
 ```
+
+## Read context
+
+For each read, the host must provide:
+
+- `sampleRate`: the intended output rate in points per second.
+- `frameLength`: the desired number of output points for that read.
+
+Both values are hints. The asset is not required to produce exactly `frameLength` points. The host is responsible for any final adjustment required by the output.
