@@ -27,6 +27,7 @@ Inputs are read-only and valid only during the current read. The asset must not 
 ## Buffer management
 
 The host provides and manages the input and output buffers. The asset must be able to request output buffer growth through a host-provided mechanism.
+Growing the output buffer preserves its contents. The output object remains the same, but any previously obtained output buffer views become invalid; the asset must obtain new views after growth.
 A read's output is valid until the next read for that asset begins. To retain it longer, the host must copy it or use another buffer.
 
 ## Vertex precision
