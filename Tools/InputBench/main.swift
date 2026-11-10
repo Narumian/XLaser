@@ -115,6 +115,22 @@ let scenarios = [
         }
     }
     """, inputs: [:], vertices: 1000, iterations: 500, warmup: 100),
+    Scenario(name: "generate_1k_reserved_mode", source: """
+    function read(c,i,o) {
+        o.reserve(10, 1000);
+        for (let s=0;s<10;s++) {
+            o.beginShape(s);
+            const start = o.reserveVertices(100), values = o.values, modes = o.modes;
+            modes.fill(Mode.normal, start, start + 100);
+            for (let v=0;v<100;v++) {
+                const k=(start+v)*8;
+                values[k]=v/100; values[k+1]=0; values[k+2]=0; values[k+3]=1;
+                values[k+4]=1; values[k+5]=1; values[k+6]=1; values[k+7]=1;
+            }
+            o.commitVertices(100);
+        }
+    }
+    """, inputs: [:], vertices: 1000, iterations: 1000, warmup: 200),
     Scenario(name: "generate_1k_batch", source: """
     const batchValues = new Float64Array(800), batchModes = new Uint16Array(100);
     function read(c,i,o) {
@@ -135,8 +151,9 @@ let scenarios = [
     Scenario(name: "audio_1024_stereo_fft_1025", source: "function read(c,i,o) { if (i.audio.samples[0] !== 0.25 || i.fft.bins[0] !== 0.5) throw new Error('bad'); \(point) }", inputs: ["audio": .audio(audio), "fft": .audioFFT(spectrum)], vertices: 1, iterations: 500, warmup: 50),
 ]
 
+let filter = ProcessInfo.processInfo.environment["XLASER_BENCH_FILTER"]
 print("engine,scenario,iterations,median_ms,p95_ms")
-for scenario in scenarios {
+for scenario in scenarios where filter == nil || scenario.name.contains(filter!) {
 #if canImport(JavaScriptCore)
     try measure(scenario, engine: JavaScriptCoreEngine(source: scenario.source), name: "JavaScriptCore")
 #endif

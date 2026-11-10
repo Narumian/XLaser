@@ -131,7 +131,7 @@ class Laser3DBuffer {
     const start = this.vertexCount;
     this.reserve(this.shapeCount, start + count);
     this.values.fill(0, start * 8, (start + count) * 8);
-    this.modes.fill(2, start, start + count);
+    this.modes.fill(Mode.blank, start, start + count);
     this.reservation = count;
     return start;
   }
@@ -162,7 +162,7 @@ class Laser3DBuffer {
     this.shapeCount++;
   }
 
-  addVertex(x, y, z, w, r, g, b, a, mode) {
+  addVertex(x, y, z, w, r, g, b, a, mode = Mode.normal) {
     if (this.reservation !== null) throw new Error("Uncommitted vertices");
     if (arguments.length === 1 && x !== null && typeof x === "object") {
       const vertex = x;
@@ -171,7 +171,7 @@ class Laser3DBuffer {
         throw new TypeError("Invalid vertex");
       [x, y, z, w] = vertex.position;
       [r, g, b, a] = vertex.rgba;
-      mode = vertex.mode;
+      mode = vertex.mode === undefined ? Mode.normal : vertex.mode;
     }
     if (this.shapeCount === 0) throw new Error("A shape must be started first");
     if (this.vertexCount >= 0xffffffff) throw new RangeError("Too many vertices");
@@ -201,13 +201,15 @@ class Laser3DBuffer {
   addVertices(values, modes) {
     if (this.reservation !== null) throw new Error("Uncommitted vertices");
     if (this.shapeCount === 0) throw new Error("A shape must be started first");
-    if (!(values instanceof Float64Array) || !(modes instanceof Uint16Array) ||
-        values.length !== modes.length * 8) throw new TypeError("Invalid vertex buffers");
-    const start = this.vertexCount, count = modes.length;
+    if (!(values instanceof Float64Array) || values.length % 8 !== 0 ||
+        (modes !== undefined && (!(modes instanceof Uint16Array) || values.length !== modes.length * 8)))
+      throw new TypeError("Invalid vertex buffers");
+    const start = this.vertexCount, count = values.length / 8;
     if (count > 0xffffffff - start) throw new RangeError("Too many vertices");
     this.reserve(this.shapeCount, start + count);
     this.values.set(values, start * 8);
-    this.modes.set(modes, start);
+    if (modes === undefined) this.modes.fill(Mode.normal, start, start + count);
+    else this.modes.set(modes, start);
     this.vertexCount += count;
     this.shapes[(this.shapeCount - 1) * 3 + 2] += count;
   }

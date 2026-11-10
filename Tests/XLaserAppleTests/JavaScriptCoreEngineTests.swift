@@ -240,6 +240,32 @@ final class JavaScriptCoreEngineTests: XCTestCase {
         }
     }
 
+    func testConvenienceDefaultsToNormalWhileReservationsStartBlank() throws {
+        let source = """
+        let reads = 0;
+        function read(c, i, o) {
+          o.beginShape(1);
+          o.addVertex(0,0,0,1,1,1,1,1);
+          o.addVertex({ position: [0,0,0,1], rgba: [1,1,1,1] });
+          const values = new Float64Array([0,0,0,1,1,1,1,1, 0,0,0,1,1,1,1,1]);
+          if (reads++ === 0) o.addVertices(values, new Uint16Array([Mode.blank, Mode.dwell]));
+          else o.addVertices(values);
+          o.reserveVertices(2);
+          o.commitVertices(2);
+        }
+        """
+        let engine = try JavaScriptCoreEngine(source: source)
+        var output = Laser3DBuffer()
+        try engine.read(context: context, inputs: [:], output: &output)
+        output.withUnsafeBuffers { _, _, modes in
+            XCTAssertEqual(Array(modes), [0, 0, 2, 1, 2, 2])
+        }
+        try engine.read(context: context, inputs: [:], output: &output)
+        output.withUnsafeBuffers { _, _, modes in
+            XCTAssertEqual(Array(modes), [0, 0, 0, 0, 2, 2])
+        }
+    }
+
     func testIncompleteReservationFailsAndStops() throws {
         let engine = try JavaScriptCoreEngine(source: "function read(c, i, o) { o.beginShape(1); o.reserveVertices(1); }")
         var output = Laser3DBuffer()
