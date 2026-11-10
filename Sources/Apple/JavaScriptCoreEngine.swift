@@ -7,6 +7,7 @@ public enum JavaScriptCoreEngineError: Error, Equatable {
     case contextUnavailable
     case runtimeUnavailable
     case javaScript(String)
+    case invalidInput
     case invalidOutput
     case stopped
 }
@@ -14,6 +15,8 @@ public enum JavaScriptCoreEngineError: Error, Equatable {
 public final class JavaScriptCoreEngine: LaserScriptEngine {
     private let context: JSContext
     private let invoke: JSValue
+    private let makeInput: JSValue
+    private var inputBuffers: [JSValue] = []
     private var stopped = false
 
     public init(source: String) throws {
@@ -27,6 +30,9 @@ public final class JavaScriptCoreEngine: LaserScriptEngine {
         if let exception = context.exception {
             throw JavaScriptCoreEngineError.javaScript(exception.toString() ?? "JavaScript exception")
         }
+        guard let makeInput = context.evaluateScript("(function() { return new Laser3DInput(); })"),
+              context.exception == nil else { throw JavaScriptCoreEngineError.runtimeUnavailable }
+        self.makeInput = makeInput
         context.evaluateScript(source)
         if let exception = context.exception {
             throw JavaScriptCoreEngineError.javaScript(exception.toString() ?? "JavaScript exception")
@@ -51,14 +57,12 @@ public final class JavaScriptCoreEngine: LaserScriptEngine {
     public func read(context readContext: LaserScriptReadContext, inputs: [[Laser3DShape]]) throws -> [Laser3DShape] {
         guard !stopped else { throw JavaScriptCoreEngineError.stopped }
         context.exception = nil
-        let encodedInputs: [[[String: Any]]] = inputs.map { stream in
-            stream.map { shape in
-                ["id": shape.id.rawValue, "vertices": shape.vertices.map { vertex in
-                    ["position": [vertex.position.x, vertex.position.y, vertex.position.z, vertex.position.w],
-                     "rgba": [vertex.rgba.x, vertex.rgba.y, vertex.rgba.z, vertex.rgba.w],
-                     "mode": vertex.mode.rawValue] as [String: Any]
-                }] as [String: Any]
-            }
+        let encodedInputs: [JSValue]
+        do {
+            encodedInputs = try inputs.enumerated().map { try encodeInput($0.element, index: $0.offset) }
+        } catch {
+            stopped = true
+            throw error
         }
         let output = invoke.call(withArguments: [["time": readContext.time, "sampleRate": readContext.sampleRate, "frameLength": readContext.frameLength], encodedInputs])
         if let exception = context.exception {
@@ -71,6 +75,63 @@ public final class JavaScriptCoreEngine: LaserScriptEngine {
         } catch {
             stopped = true
             throw JavaScriptCoreEngineError.invalidOutput
+        }
+    }
+
+    private func encodeInput(_ shapes: [Laser3DShape], index: Int) throws -> JSValue {
+        var count = 0
+        guard UInt32(exactly: shapes.count) != nil, shapes.count <= Int.max / 3 else { throw JavaScriptCoreEngineError.invalidInput }
+        for shape in shapes {
+            let (next, overflow) = count.addingReportingOverflow(shape.vertices.count)
+            guard !overflow, UInt32(exactly: next) != nil, next <= Int.max / 8 else { throw JavaScriptCoreEngineError.invalidInput }
+            count = next
+        }
+        while inputBuffers.count <= index {
+            guard let input = makeInput.call(withArguments: []), context.exception == nil else { throw JavaScriptCoreEngineError.invalidInput }
+            inputBuffers.append(input)
+        }
+        let input = inputBuffers[index]
+        input.invokeMethod("prepare", withArguments: [count, shapes.count])
+        guard context.exception == nil,
+              let valueBuffer = input.forProperty("values"),
+              let modeBuffer = input.forProperty("modes"),
+              let shapeBuffer = input.forProperty("shapes"), context.exception == nil else { throw JavaScriptCoreEngineError.invalidInput }
+        var values: [Double] = []; values.reserveCapacity(count * 8)
+        var modes: [UInt16] = []; modes.reserveCapacity(count)
+        var ranges: [UInt32] = []; ranges.reserveCapacity(shapes.count * 3)
+        var offset: UInt32 = 0
+        for shape in shapes {
+            guard let length = UInt32(exactly: shape.vertices.count) else { throw JavaScriptCoreEngineError.invalidInput }
+            ranges.append(contentsOf: [shape.id.rawValue, offset, length])
+            offset += length
+            for vertex in shape.vertices {
+                values.append(contentsOf: [vertex.position.x, vertex.position.y, vertex.position.z, vertex.position.w,
+                                           vertex.rgba.x, vertex.rgba.y, vertex.rgba.z, vertex.rgba.w])
+                modes.append(vertex.mode.rawValue)
+            }
+        }
+        try writeArray(values, to: valueBuffer, type: kJSTypedArrayTypeFloat64Array)
+        try writeArray(modes, to: modeBuffer, type: kJSTypedArrayTypeUint16Array)
+        try writeArray(ranges, to: shapeBuffer, type: kJSTypedArrayTypeUint32Array)
+        return input
+    }
+
+    private func writeArray<T>(_ values: [T], to target: JSValue, type: JSTypedArrayType) throws {
+        let jsContext = context.jsGlobalContextRef
+        var exception: JSValueRef?
+        guard JSValueGetTypedArrayType(jsContext, target.jsValueRef, &exception) == type, exception == nil,
+              let object = JSValueToObject(jsContext, target.jsValueRef, &exception), exception == nil,
+              JSObjectGetTypedArrayLength(jsContext, object, &exception) >= values.count, exception == nil else {
+            throw JavaScriptCoreEngineError.invalidInput
+        }
+        let offset = JSObjectGetTypedArrayByteOffset(jsContext, object, &exception)
+        guard exception == nil else { throw JavaScriptCoreEngineError.invalidInput }
+        guard !values.isEmpty else { return }
+        guard let bytes = JSObjectGetTypedArrayBytesPtr(jsContext, object, &exception), exception == nil else {
+            throw JavaScriptCoreEngineError.invalidInput
+        }
+        values.withUnsafeBytes { source in
+            if let base = source.baseAddress { bytes.advanced(by: offset).copyMemory(from: base, byteCount: source.count) }
         }
     }
 

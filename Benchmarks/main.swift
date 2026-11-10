@@ -35,6 +35,12 @@ function read(c, inputs, output) {
 }
 """
 
+let typedPassthrough = """
+function read(c, inputs, output) {
+    output.addStream(inputs[0]);
+}
+"""
+
 func benchmark(name: String, source: String, count: Int, inputs: [[Laser3DShape]], iterations: Int) throws {
     let engine: any LaserScriptEngine = try JavaScriptCoreEngine(source: source)
     let context = LaserScriptReadContext(time: 0, sampleRate: 30000, frameLength: count)
@@ -141,6 +147,7 @@ for count in [2, 100, 1000] {
     try benchmark(name: "engine-object-generate", source: generator, count: count, inputs: [], iterations: iterations)
     let input = makeShapes(count: count, shapeCount: min(10, count))
     try benchmark(name: "engine-object-passthrough", source: passthrough, count: count, inputs: [input], iterations: iterations)
+    try benchmark(name: "engine-typed-passthrough", source: typedPassthrough, count: count, inputs: [input], iterations: iterations)
     try benchmark(name: "engine-direct-generate", source: directGenerator, count: count, inputs: [], iterations: iterations)
     try benchmarkTypedArray(count: count, input: nil, iterations: iterations)
     try benchmarkTypedArray(count: count, input: input, iterations: iterations)

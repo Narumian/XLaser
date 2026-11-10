@@ -35,6 +35,35 @@ final class JavaScriptCoreEngineTests: XCTestCase {
         XCTAssertEqual(result, [input])
     }
 
+    func testTypedInputsCombineAndReuse() throws {
+        let engine = try JavaScriptCoreEngine(source: "function read(c, inputs, output) { for (const input of inputs) output.addStream(input); }")
+        let a = Laser3DShape(id: 91, vertices: [LaserVertex(x: -0.25, y: 0.5, z: 2, w: 0.75, rgba: SIMD4(0.1, 0.2, 0.3, 0.4), mode: .blank)])
+        let empty = Laser3DShape(id: 77, vertices: [])
+        let b = Laser3DShape(id: 42, vertices: [LaserVertex(x: 2, y: -1, mode: .dwell)])
+        let context = LaserScriptReadContext(time: 0, sampleRate: 30000, frameLength: 1)
+        XCTAssertEqual(try engine.read(context: context, inputs: [[a, empty], [b]]), [a, empty, b])
+        XCTAssertEqual(try engine.read(context: context, inputs: [[], [empty]]), [empty])
+        XCTAssertEqual(try engine.read(context: context, inputs: [[b], [a]]), [b, a])
+        XCTAssertEqual(a.vertices[0].position.x, -0.25)
+        let many = (0..<20).map { index in
+            Laser3DShape(id: LaserShapeID(UInt32(index)), vertices: (0..<5).map { vertex in
+                LaserVertex(x: Double(index), y: Double(vertex), mode: .normal)
+            })
+        }
+        XCTAssertEqual(try engine.read(context: context, inputs: [many]), many)
+    }
+
+    func testTypedInputInvalidRangeStopsAsset() throws {
+        let source = "function read(c, inputs, output) { inputs[0].shapes[1] = 999; output.addStream(inputs[0]); }"
+        let engine = try JavaScriptCoreEngine(source: source)
+        let input = Laser3DShape(id: 1, vertices: [LaserVertex(x: 0, y: 0)])
+        let context = LaserScriptReadContext(time: 0, sampleRate: 30000, frameLength: 1)
+        XCTAssertThrowsError(try engine.read(context: context, inputs: [[input]]))
+        XCTAssertThrowsError(try engine.read(context: context, inputs: [[input]])) { error in
+            XCTAssertEqual(error as? JavaScriptCoreEngineError, .stopped)
+        }
+    }
+
     func testTypedArrayOutputGrowsAndResets() throws {
         let source = """
         function read(c, inputs, output) {
