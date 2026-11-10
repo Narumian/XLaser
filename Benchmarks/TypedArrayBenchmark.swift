@@ -1,7 +1,7 @@
 #if canImport(JavaScriptCore)
 import Foundation
 import JavaScriptCore
-import LaserScriptKit
+import XLaser
 
 // Experimental benchmark only: copied typed arrays, no shared native storage.
 final class TypedArrayBenchmark {

@@ -1,8 +1,8 @@
 #if canImport(JavaScriptCore)
 import Foundation
 import Dispatch
-import LaserScriptKit
-import LaserScriptKitApple
+import XLaser
+import XLaserApple
 
 let generator = """
 function read(c, inputs, output) {

@@ -1,6 +1,8 @@
-# LaserScript Protocol
+# LaserScriptable Protocol
 
-## Single-file asset
+LaserScriptable defines common semantics for laser assets implemented in multiple programming languages.
+
+## JavaScript single-file asset
 
 - A single-file LaserScript asset must use the `.js` extension.
 - The file must be valid JavaScript.
@@ -19,7 +21,7 @@ function render(context) {
 }
 ```
 
-## Directory package
+## JavaScript directory package
 
 - A directory package must have the `.ls` extension.
 - The package must contain `main.js` at its root as its entry point.

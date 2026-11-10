@@ -1,7 +1,7 @@
 #if canImport(JavaScriptCore)
 import Foundation
 import JavaScriptCore
-import LaserScriptKit
+import XLaser
 
 // Experimental fixed-capacity buffers retained by JavaScriptCore; not a public engine API.
 final class SharedBufferBenchmark {

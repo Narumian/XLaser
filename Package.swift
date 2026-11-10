@@ -2,16 +2,16 @@
 import PackageDescription
 
 let package = Package(
-    name: "LaserScriptKit",
+    name: "XLaser",
     products: [
-        .library(name: "LaserScriptKit", targets: ["LaserScriptKit"]),
-        .library(name: "LaserScriptKitApple", targets: ["LaserScriptKitApple"]),
+        .library(name: "XLaser", targets: ["XLaser"]),
+        .library(name: "XLaserApple", targets: ["XLaserApple"]),
     ],
     targets: [
-        .target(name: "LaserScriptKit"),
-        .target(name: "LaserScriptKitApple", dependencies: ["LaserScriptKit"], path: "Sources/Apple"),
-        .executableTarget(name: "LaserScriptBench", dependencies: ["LaserScriptKit", "LaserScriptKitApple"], path: "Benchmarks"),
-        .testTarget(name: "LaserScriptKitTests", dependencies: ["LaserScriptKit"]),
-        .testTarget(name: "LaserScriptKitAppleTests", dependencies: ["LaserScriptKitApple", "LaserScriptKit"]),
+        .target(name: "XLaser"),
+        .target(name: "XLaserApple", dependencies: ["XLaser"], path: "Sources/Apple"),
+        .executableTarget(name: "LaserScriptBench", dependencies: ["XLaser", "XLaserApple"], path: "Benchmarks"),
+        .testTarget(name: "XLaserTests", dependencies: ["XLaser"]),
+        .testTarget(name: "XLaserAppleTests", dependencies: ["XLaserApple", "XLaser"]),
     ]
 )

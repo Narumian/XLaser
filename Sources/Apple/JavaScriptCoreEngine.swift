@@ -1,7 +1,7 @@
 #if canImport(JavaScriptCore)
 import Foundation
 import JavaScriptCore
-import LaserScriptKit
+import XLaser
 
 public enum JavaScriptCoreEngineError: Error, Equatable {
     case contextUnavailable

@@ -1,5 +1,5 @@
 import XCTest
-import LaserScriptKit
+import XLaser
 
 final class Laser3DBufferTests: XCTestCase {
     func testShapesAndVerticesUseContiguousBuffers() throws {

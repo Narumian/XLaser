@@ -1,8 +1,8 @@
 #if canImport(JavaScriptCore)
 import XCTest
 import Foundation
-import LaserScriptKitApple
-import LaserScriptKit
+import XLaserApple
+import XLaser
 
 final class JavaScriptCoreEngineTests: XCTestCase {
     func testDebugAssetChangesWithTime() throws {
