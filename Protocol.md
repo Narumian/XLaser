@@ -12,12 +12,17 @@ An asset may declare the following metadata:
 - `DESCRIPTION`: a string describing the asset.
 - `CATEGORIES`: an array of category strings.
 - `TAGS`: an array of tag strings.
+- `AUTHOR`: a string identifying the creator.
+- `LICENSE`: a string identifying or describing the asset's license.
+- `ID`: a string identifying the asset.
+- `VERSION`: a string identifying the asset version, separate from the protocol version.
 
-All fields are optional. Category and tag values are not restricted by this protocol. The host must be able to obtain the declared metadata through the asset descriptor.
+All fields are optional. Category and tag values, identifier formats, version schemes, and license vocabulary are not restricted by this protocol. The host must be able to obtain the declared metadata through the asset descriptor.
 
 ## Input declarations
 
 Asset metadata may declare laser inputs and parameters in an `INPUTS` array. Each entry must contain string-valued `NAME` and `TYPE` fields. Numeric inputs may include `DEFAULT`, `MIN`, and `MAX` attributes.
+Each input may also include `LABEL`, `DESCRIPTION`, and `UNIT` string fields for display; `NAME` remains the input's programmatic key.
 Supported input types include `float`, `int`, `long`, `bool`, `string`, `vec2`, `vec3`, `vec4`, `point2D`, `color`, `enum`, `event`, `array`, `matrix`, `laser`, `image`, `audio`, and `audioFFT`.
 `long` is an alias for `int`, and `point2D` is an alias for `vec2`.
 The host must be able to obtain an asset descriptor containing its input declarations.

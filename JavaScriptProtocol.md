@@ -22,14 +22,18 @@ For example (the header key and version are illustrative):
   "DESCRIPTION": "A point with an adjustable horizontal position.",
   "CATEGORIES": ["Graphic"],
   "TAGS": ["point"],
+  "AUTHOR": "Example Author",
+  "LICENSE": "MIT",
+  "ID": "example.adjustable-point",
+  "VERSION": "1.0",
   "INPUTS": [
-    { "NAME": "speed", "TYPE": "float", "DEFAULT": 1.0, "MIN": 0.0, "MAX": 10.0 }
+    { "NAME": "x", "TYPE": "float", "LABEL": "Horizontal position", "DESCRIPTION": "Position along the X axis.", "UNIT": "normalized", "DEFAULT": 0.0, "MIN": -1.0, "MAX": 1.0 }
   ]
 }*/
 
 function read(context, inputs, output) {
   output.beginShape(0);
-  output.addVertex(inputs.speed ?? 1, 0, 0, 1, 1, 1, 1, 1, 0);
+  output.addVertex(inputs.x ?? 0, 0, 0, 1, 1, 1, 1, 1, 0);
 }
 ```
 

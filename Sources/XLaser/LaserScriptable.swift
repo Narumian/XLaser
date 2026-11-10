@@ -70,6 +70,9 @@ public struct LaserDescriptor: Sendable, Equatable {
         public let defaultValue: Value?
         public let minimum: Double?
         public let maximum: Double?
+        public let label: String?
+        public let description: String?
+        public let unit: String?
 
         public var canonicalType: String {
             switch type {
@@ -79,21 +82,40 @@ public struct LaserDescriptor: Sendable, Equatable {
             }
         }
 
-        public init(name: String, type: String, defaultValue: Value? = nil, minimum: Double? = nil, maximum: Double? = nil) {
+        public init(name: String, type: String, defaultValue: Value? = nil, minimum: Double? = nil, maximum: Double? = nil,
+                    label: String? = nil, description: String? = nil, unit: String? = nil) {
             self.name = name
             self.type = type
             self.defaultValue = defaultValue
             self.minimum = minimum
             self.maximum = maximum
+            self.label = label
+            self.description = description
+            self.unit = unit
         }
     }
 
     public let name: String?
+    public let description: String?
+    public let categories: [String]?
+    public let tags: [String]?
+    public let author: String?
+    public let license: String?
+    public let id: String?
+    public let version: String?
     public let inputs: [Input]
 
-    public init(name: String? = nil, inputs: [Input] = []) {
+    public init(name: String? = nil, inputs: [Input] = [], description: String? = nil, categories: [String]? = nil,
+                tags: [String]? = nil, author: String? = nil, license: String? = nil, id: String? = nil, version: String? = nil) {
         self.name = name
         self.inputs = inputs
+        self.description = description
+        self.categories = categories
+        self.tags = tags
+        self.author = author
+        self.license = license
+        self.id = id
+        self.version = version
     }
 }
 

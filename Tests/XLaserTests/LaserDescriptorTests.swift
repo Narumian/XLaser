@@ -26,4 +26,37 @@ final class LaserDescriptorTests: XCTestCase {
     func testInvalidHeaderIsReported() {
         XCTAssertThrowsError(try LaserJavaScriptDescriptor.parse("/*{\"INPUTS\":[{}]}*/"))
     }
+
+    func testHeaderRetainsAssetAndInputMetadata() throws {
+        let source = #"""
+        /*{
+          "NAME": "Tunnel", "DESCRIPTION": "A tunnel", "CATEGORIES": ["Beam", "Graphic"],
+          "TAGS": ["pulse"], "AUTHOR": "Artist", "LICENSE": "MIT",
+          "ID": "example.tunnel", "VERSION": "2.1",
+          "INPUTS": [{"NAME": "speed", "TYPE": "float", "LABEL": "Speed",
+                      "DESCRIPTION": "Rotation rate", "UNIT": "rad/s", "DEFAULT": 1}]
+        }*/
+        """#
+        let descriptor = try LaserJavaScriptDescriptor.parse(source)
+        XCTAssertEqual(descriptor.name, "Tunnel")
+        XCTAssertEqual(descriptor.description, "A tunnel")
+        XCTAssertEqual(descriptor.categories, ["Beam", "Graphic"])
+        XCTAssertEqual(descriptor.tags, ["pulse"])
+        XCTAssertEqual(descriptor.author, "Artist")
+        XCTAssertEqual(descriptor.license, "MIT")
+        XCTAssertEqual(descriptor.id, "example.tunnel")
+        XCTAssertEqual(descriptor.version, "2.1")
+        XCTAssertEqual(descriptor.inputs.first, .init(name: "speed", type: "float", defaultValue: .number(1),
+                                                       label: "Speed", description: "Rotation rate", unit: "rad/s"))
+    }
+
+    func testMetadataIsOptionalAndRejectsWrongTypes() throws {
+        let missing = try LaserJavaScriptDescriptor.parse(#"/*{"INPUTS":[{"NAME":"x","TYPE":"float"}]}*/"#)
+        XCTAssertNil(missing.description)
+        XCTAssertNil(missing.categories)
+        XCTAssertNil(missing.inputs.first?.label)
+        XCTAssertEqual(try LaserJavaScriptDescriptor.parse(#"/*{"CATEGORIES":[],"TAGS":[]}*/"#).categories, [])
+        XCTAssertThrowsError(try LaserJavaScriptDescriptor.parse(#"/*{"TAGS":"beam"}*/"#))
+        XCTAssertThrowsError(try LaserJavaScriptDescriptor.parse(#"/*{"INPUTS":[{"NAME":"x","TYPE":"float","UNIT":1}]}*/"#))
+    }
 }
