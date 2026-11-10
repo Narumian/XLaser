@@ -3,6 +3,7 @@ import CV8Bridge
 import XLaser
 
 public enum V8EngineError: Error, Equatable {
+    case unavailable
     case javaScript(String)
     case invalidInput
     case invalidOutput
@@ -10,10 +11,13 @@ public enum V8EngineError: Error, Equatable {
 }
 
 public final class V8Engine: LaserScriptEngine {
+    public static var isAvailable: Bool { xlv8_available() != 0 }
+
     private let runtime: OpaquePointer
     private var stopped = false
 
     public init(source: String) throws {
+        guard Self.isAvailable else { throw V8EngineError.unavailable }
         let host = try LaserScriptJavaScriptRuntime.source()
         guard !source.utf8.contains(0), !host.utf8.contains(0) else { throw V8EngineError.invalidInput }
         guard let runtime = host.withCString({ runtime in

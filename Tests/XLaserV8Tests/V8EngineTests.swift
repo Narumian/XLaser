@@ -4,8 +4,12 @@ import XLaser
 import XLaserV8
 
 final class V8EngineTests: XCTestCase {
+    override func setUpWithError() throws {
+        try XCTSkipUnless(V8Engine.isAvailable, "V8 library is not configured")
+    }
+
     func testDebugAsset() throws {
-        let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+        let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
         let source = try String(contentsOf: root.appendingPathComponent("Debug/RotatingLine.js"), encoding: .utf8)
         let engine: any LaserScriptEngine = try V8Engine(source: source)
         let result = try engine.read(context: .init(time: .pi / 2, sampleRate: 30000, frameLength: 1000), inputs: [])
@@ -85,6 +89,16 @@ final class V8EngineTests: XCTestCase {
         }
         XCTAssertThrowsError(try engine.read(context: context, inputs: [])) { error in
             XCTAssertEqual(error as? V8EngineError, .stopped)
+        }
+    }
+}
+
+final class V8AvailabilityTests: XCTestCase {
+    func testUnavailableIsReported() throws {
+        if !V8Engine.isAvailable {
+            XCTAssertThrowsError(try V8Engine(source: "")) { error in
+                XCTAssertEqual(error as? V8EngineError, .unavailable)
+            }
         }
     }
 }

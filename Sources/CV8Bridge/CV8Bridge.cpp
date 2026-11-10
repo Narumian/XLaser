@@ -1,4 +1,5 @@
 #include "CV8Bridge.h"
+#if defined(XLASER_V8_ENABLED)
 #include <libplatform/libplatform.h>
 #include <v8.h>
 #include <cmath>
@@ -208,4 +209,12 @@ int xlv8_read(XLaserV8Runtime *runtime, double time, double sample_rate, double 
     return 0;
 }
 
+int xlv8_available(void) { return 1; }
 const char *xlv8_error(void) { return error_message.c_str(); }
+#else
+int xlv8_available(void) { return 0; }
+XLaserV8Runtime *xlv8_create(const char *, const char *) { return nullptr; }
+void xlv8_destroy(XLaserV8Runtime *) {}
+int xlv8_read(XLaserV8Runtime *, double, double, double, const XLaserV8Input *, size_t, XLaserV8Output *) { return 1; }
+const char *xlv8_error(void) { return "V8 library is not configured"; }
+#endif

@@ -21,6 +21,7 @@ typedef struct {
     size_t vertex_count;
     size_t shape_count;
 } XLaserV8Output;
+int xlv8_available(void);
 XLaserV8Runtime *xlv8_create(const char *runtime, const char *source);
 void xlv8_destroy(XLaserV8Runtime *runtime);
 int xlv8_read(XLaserV8Runtime *runtime, double time, double sample_rate, double frame_length,
