@@ -199,7 +199,7 @@ int xlv8_read(XLaserV8Runtime *runtime, double time, double sample_rate, double 
     v8::Context::Scope context_scope(context);
     v8::TryCatch caught(isolate);
     auto context_value = v8::Object::New(isolate);
-    auto js_inputs = v8::Array::New(isolate, static_cast<int>(input_count));
+    auto js_inputs = v8::Object::New(isolate, v8::Null(isolate), nullptr, nullptr, 0);
     if (!set_number(isolate, context, context_value, "time", time) ||
         !set_number(isolate, context, context_value, "sampleRate", sample_rate) ||
         !set_number(isolate, context, context_value, "frameLength", frame_length)) {
@@ -207,6 +207,17 @@ int xlv8_read(XLaserV8Runtime *runtime, double time, double sample_rate, double 
     }
     for (size_t i = 0; i < input_count; ++i) {
         const auto &input = inputs[i];
+        v8::Local<v8::String> name;
+        if (!input.name || !v8::String::NewFromUtf8(isolate, input.name).ToLocal(&name)) {
+            error_message = "Invalid input name"; return 1;
+        }
+        if (input.kind == 1) {
+            if (!std::isfinite(input.number) || !js_inputs->CreateDataProperty(context, name, v8::Number::New(isolate, input.number)).FromMaybe(false)) {
+                error_message = "Invalid numeric input"; return 1;
+            }
+            continue;
+        }
+        if (input.kind != 0) { error_message = "Invalid input type"; return 1; }
         if (input.vertex_count > UINT32_MAX || input.shape_count > UINT32_MAX ||
             input.vertex_count > std::numeric_limits<size_t>::max() / (8 * sizeof(double)) ||
             input.shape_count > std::numeric_limits<size_t>::max() / (3 * sizeof(uint32_t)) ||
@@ -230,7 +241,7 @@ int xlv8_read(XLaserV8Runtime *runtime, double time, double sample_rate, double 
         };
         v8::Local<v8::Value> value;
         if (!runtime->make_input.Get(isolate)->Call(context, v8::Undefined(isolate), 5, args).ToLocal(&value) ||
-            !js_inputs->Set(context, static_cast<uint32_t>(i), value).FromMaybe(false)) {
+            !js_inputs->CreateDataProperty(context, name, value).FromMaybe(false)) {
             save_error(isolate, caught, "Unable to create input"); return 1;
         }
     }

@@ -16,9 +16,9 @@ func makeInput(vertices: Int, shapes: Int) throws -> Laser3DBuffer {
     return buffer
 }
 
-func benchmark(_ name: String, source: String, inputs: [Laser3DBuffer], vertices: Int, iterations: Int) throws {
-    let engine: any LaserScriptEngine = try JavaScriptCoreEngine(source: source)
-    let context = LaserScriptReadContext(time: 0, sampleRate: 30000, frameLength: vertices)
+func benchmark(_ name: String, source: String, inputs: [String: LaserInput], vertices: Int, iterations: Int) throws {
+    let engine: any LaserScriptable = try JavaScriptCoreEngine(source: source)
+    let context = LaserReadContext(time: 0, sampleRate: 30000, frameLength: vertices)
     var output = Laser3DBuffer()
     try output.reserveCapacity(shapes: 10, vertices: vertices)
     for _ in 0..<10 { try engine.read(context: context, inputs: inputs, output: &output) }
@@ -35,7 +35,7 @@ func benchmark(_ name: String, source: String, inputs: [Laser3DBuffer], vertices
 
 enum BenchError: Error { case invalidOutput }
 let input = try makeInput(vertices: 1000, shapes: 10)
-try benchmark("jsc-passthrough", source: "function read(c, inputs, output) { output.addStream(inputs[0]); }", inputs: [input], vertices: 1000, iterations: 100)
+try benchmark("jsc-passthrough", source: "function read(c, inputs, output) { output.addStream(inputs.first); }", inputs: ["first": .laser(input)], vertices: 1000, iterations: 100)
 try benchmark("jsc-generate", source: """
 function read(c, inputs, output) {
     for (let shape = 0; shape < 10; shape++) {
@@ -43,7 +43,7 @@ function read(c, inputs, output) {
         for (let i = 0; i < 100; i++) output.addVertex(i / 100, 0, 0, 1, 1, 1, 1, 1, 0);
     }
 }
-""", inputs: [], vertices: 1000, iterations: 100)
+""", inputs: [:], vertices: 1000, iterations: 100)
 #else
 print("LaserScriptBench requires JavaScriptCore.")
 #endif

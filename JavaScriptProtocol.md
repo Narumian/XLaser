@@ -7,6 +7,7 @@
 - The file must begin with a JavaScript block comment containing a JSON object as its header.
 - The header must identify the file as a LaserScript asset and specify its LaserScript protocol version.
 - The asset must define a `read(context, inputs, output)` function. The host calls it for each read, providing the read context, inputs, and output buffer.
+- Inputs are accessed by their declared names, for example `inputs.speed`.
 
 For example (the header key and version are illustrative):
 
@@ -20,7 +21,7 @@ For example (the header key and version are illustrative):
 
 function read(context, inputs, output) {
   output.beginShape(0);
-  output.addVertex(0, 0, 0, 1, 1, 1, 1, 1, 0);
+  output.addVertex(inputs.speed ?? 1, 0, 0, 1, 1, 1, 1, 1, 0);
 }
 ```
 

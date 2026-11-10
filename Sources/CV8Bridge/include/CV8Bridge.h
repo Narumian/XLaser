@@ -8,6 +8,9 @@ extern "C" {
 
 typedef struct XLaserV8Runtime XLaserV8Runtime;
 typedef struct {
+    const char *name;
+    int kind;
+    double number;
     const double *values;
     const uint16_t *modes;
     const uint32_t *shapes;

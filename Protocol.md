@@ -8,6 +8,7 @@ JavaScript asset formats are defined in [JavaScriptProtocol.md](JavaScriptProtoc
 
 Asset metadata may declare laser inputs and parameters in an `INPUTS` array. Each entry must contain string-valued `NAME` and `TYPE` fields. Numeric inputs may include `DEFAULT`, `MIN`, and `MAX` attributes.
 Supported input types include `laser`, `float`, `long`, `bool`, `event`, `point2D`, `color`, and `image`.
+The host must be able to obtain an asset descriptor containing its input declarations.
 
 ## Read context
 

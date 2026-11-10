@@ -12,7 +12,8 @@ public enum JavaScriptCoreEngineError: Error, Equatable {
     case stopped
 }
 
-public final class JavaScriptCoreEngine: LaserScriptEngine {
+public final class JavaScriptCoreEngine: LaserScriptable {
+    public let descriptor: LaserDescriptor
     private let context: JSContext
     private let invoke: JSValue
     private let makeInput: JSValue
@@ -20,6 +21,7 @@ public final class JavaScriptCoreEngine: LaserScriptEngine {
     private var stopped = false
 
     public init(source: String) throws {
+        descriptor = try LaserJavaScriptDescriptor.parse(source)
         guard let context = JSContext() else { throw JavaScriptCoreEngineError.contextUnavailable }
         self.context = context
         guard let runtime = try? LaserScriptJavaScriptRuntime.source() else {
@@ -53,13 +55,27 @@ public final class JavaScriptCoreEngine: LaserScriptEngine {
         self.invoke = invoke
     }
 
-    public func read(context readContext: LaserScriptReadContext, inputs: [Laser3DBuffer], output: inout Laser3DBuffer) throws {
+    public func read(context readContext: LaserReadContext, inputs: [String: LaserInput], output: inout Laser3DBuffer) throws {
         output.removeAll()
         guard !stopped else { throw JavaScriptCoreEngineError.stopped }
         context.exception = nil
-        let encodedInputs: [JSValue]
+        let encodedInputs: JSValue
         do {
-            encodedInputs = try inputs.enumerated().map { try encodeInput($0.element, index: $0.offset) }
+            guard let object = context.evaluateScript("Object.create(null)") else { throw JavaScriptCoreEngineError.invalidInput }
+            var index = 0
+            for (name, value) in inputs.sorted(by: { $0.key < $1.key }) {
+                guard !name.utf8.contains(0) else { throw JavaScriptCoreEngineError.invalidInput }
+                switch value {
+                case .laser(let buffer):
+                    object.setValue(try encodeInput(buffer, index: index), forProperty: name)
+                    index += 1
+                case .float(let number):
+                    guard number.isFinite else { throw JavaScriptCoreEngineError.invalidInput }
+                    object.setValue(number, forProperty: name)
+                }
+                guard context.exception == nil else { throw JavaScriptCoreEngineError.invalidInput }
+            }
+            encodedInputs = object
         } catch {
             stopped = true
             throw error

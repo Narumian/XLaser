@@ -10,7 +10,8 @@ public enum V8EngineError: Error, Equatable {
     case stopped
 }
 
-public final class V8Engine: LaserScriptEngine {
+public final class V8Engine: LaserScriptable {
+    public let descriptor: LaserDescriptor
     public static var isAvailable: Bool { xlv8_available() != 0 }
 
     private let runtime: OpaquePointer
@@ -18,6 +19,7 @@ public final class V8Engine: LaserScriptEngine {
 
     public init(source: String) throws {
         guard Self.isAvailable else { throw V8EngineError.unavailable }
+        descriptor = try LaserJavaScriptDescriptor.parse(source)
         let host = try LaserScriptJavaScriptRuntime.source()
         guard !source.utf8.contains(0), !host.utf8.contains(0) else { throw V8EngineError.invalidInput }
         guard let runtime = host.withCString({ runtime in
@@ -28,7 +30,7 @@ public final class V8Engine: LaserScriptEngine {
 
     deinit { xlv8_destroy(runtime) }
 
-    public func read(context: LaserScriptReadContext, inputs: [Laser3DBuffer], output: inout Laser3DBuffer) throws {
+    public func read(context: LaserReadContext, inputs: [String: LaserInput], output: inout Laser3DBuffer) throws {
         output.removeAll()
         guard !stopped else { throw V8EngineError.stopped }
         do {
@@ -64,6 +66,8 @@ public final class V8Engine: LaserScriptEngine {
 
 private struct PackedInputs {
     struct Range {
+        let name: String
+        let number: Double?
         let vertexOffset: Int
         let shapeOffset: Int
         let vertexCount: Int
@@ -75,8 +79,16 @@ private struct PackedInputs {
     var shapes: [UInt32] = []
     var ranges: [Range] = []
 
-    init(_ inputs: [Laser3DBuffer]) throws {
-        for stream in inputs {
+    init(_ inputs: [String: LaserInput]) throws {
+        for (name, input) in inputs.sorted(by: { $0.key < $1.key }) {
+            guard !name.utf8.contains(0) else { throw V8EngineError.invalidInput }
+            guard case .laser(let stream) = input else {
+                if case .float(let number) = input {
+                    guard number.isFinite else { throw V8EngineError.invalidInput }
+                    ranges.append(Range(name: name, number: number, vertexOffset: 0, shapeOffset: 0, vertexCount: 0, shapeCount: 0))
+                }
+                continue
+            }
             let vertexOffset = modes.count, shapeOffset = shapes.count
             guard UInt32(exactly: stream.shapeCount) != nil, UInt32(exactly: stream.vertexCount) != nil,
                   stream.shapeCount <= (Int.max - shapeOffset) / 3,
@@ -86,7 +98,7 @@ private struct PackedInputs {
                 values.append(contentsOf: streamValues)
                 modes.append(contentsOf: streamModes)
             }
-            ranges.append(Range(vertexOffset: vertexOffset, shapeOffset: shapeOffset,
+            ranges.append(Range(name: name, number: nil, vertexOffset: vertexOffset, shapeOffset: shapeOffset,
                                 vertexCount: stream.vertexCount, shapeCount: stream.shapeCount))
         }
     }
@@ -95,8 +107,10 @@ private struct PackedInputs {
         values.withUnsafeBufferPointer { values in
             modes.withUnsafeBufferPointer { modes in
                 shapes.withUnsafeBufferPointer { shapes in
-                    let descriptors = ranges.map { range in
-                        XLaserV8Input(values: values.baseAddress?.advanced(by: range.vertexOffset * 8),
+                    let names = ranges.map { strdup($0.name) }
+                    defer { for name in names { free(name) } }
+                    let descriptors = zip(ranges, names).map { range, name in
+                        XLaserV8Input(name: UnsafePointer(name), kind: range.number == nil ? 0 : 1, number: range.number ?? 0, values: values.baseAddress?.advanced(by: range.vertexOffset * 8),
                                       modes: modes.baseAddress?.advanced(by: range.vertexOffset),
                                       shapes: shapes.baseAddress?.advanced(by: range.shapeOffset),
                                       vertex_count: range.vertexCount, shape_count: range.shapeCount)
