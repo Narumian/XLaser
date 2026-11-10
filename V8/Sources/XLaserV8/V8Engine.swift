@@ -27,68 +27,35 @@ public final class V8Engine: LaserScriptEngine {
     public func read(context: LaserScriptReadContext, inputs: [[Laser3DShape]]) throws -> [Laser3DShape] {
         guard !stopped else { throw V8EngineError.stopped }
         do {
-            let encoder = JSONEncoder()
-            let contextData = try encoder.encode(Context(time: context.time, sampleRate: context.sampleRate, frameLength: context.frameLength))
-            let inputData = try encoder.encode(inputs.map { $0.map(InputShape.init) })
-            guard let contextJSON = String(data: contextData, encoding: .utf8),
-                  let inputJSON = String(data: inputData, encoding: .utf8) else { throw V8EngineError.invalidInput }
-            guard let result = contextJSON.withCString({ context in inputJSON.withCString { input in xlv8_read(runtime, context, input) } }) else {
-                throw V8EngineError.javaScript(String(cString: xlv8_error()))
+            let packed = try PackedInputs(inputs)
+            var output = XLaserV8Output()
+            let status = packed.withInputs { descriptors in
+                xlv8_read(runtime, context.time, context.sampleRate, Double(context.frameLength),
+                          descriptors.baseAddress, descriptors.count, &output)
             }
-            let data = Data(String(cString: result).utf8)
-            guard let output = try? JSONDecoder().decode(Output.self, from: data) else { throw V8EngineError.invalidOutput }
-            return try output.shapesValue()
-        } catch let error as V8EngineError {
-            stopped = true
-            throw error
+            if status == 2 { throw V8EngineError.invalidOutput }
+            guard status == 0 else { throw V8EngineError.javaScript(String(cString: xlv8_error())) }
+            return try decode(output)
         } catch {
             stopped = true
-            throw V8EngineError.invalidInput
+            throw error
         }
     }
-}
 
-private struct Context: Encodable {
-    let time: Double
-    let sampleRate: Double
-    let frameLength: Int
-}
-
-private struct InputShape: Encodable {
-    let id: UInt32
-    let vertices: [InputVertex]
-    init(_ shape: Laser3DShape) {
-        id = shape.id.rawValue
-        vertices = shape.vertices.map(InputVertex.init)
-    }
-}
-
-private struct InputVertex: Encodable {
-    let position: [Double]
-    let rgba: [Double]
-    let mode: UInt16
-    init(_ vertex: LaserVertex) {
-        position = [vertex.position.x, vertex.position.y, vertex.position.z, vertex.position.w]
-        rgba = [vertex.rgba.x, vertex.rgba.y, vertex.rgba.z, vertex.rgba.w]
-        mode = vertex.mode.rawValue
-    }
-}
-
-private struct Output: Decodable {
-    let shapes: [UInt32]
-    let values: [Double]
-    let modes: [UInt16]
-
-    func shapesValue() throws -> [Laser3DShape] {
-        guard shapes.count % 3 == 0, values.count % 8 == 0, values.count / 8 == modes.count else { throw V8EngineError.invalidOutput }
-        var result: [Laser3DShape] = []
-        result.reserveCapacity(shapes.count / 3)
-        for index in 0..<(shapes.count / 3) {
-            guard let start = Int(exactly: shapes[index * 3 + 1]), let count = Int(exactly: shapes[index * 3 + 2]),
-                  start <= modes.count, count <= modes.count - start else { throw V8EngineError.invalidOutput }
-            var vertices: [LaserVertex] = []
-            vertices.reserveCapacity(count)
-            for vertex in start..<(start + count) {
+    private func decode(_ output: XLaserV8Output) throws -> [Laser3DShape] {
+        let count = output.vertex_count, shapeCount = output.shape_count
+        guard count >= 0, shapeCount >= 0, count <= Int.max / 8, shapeCount <= Int.max / 3,
+              count == 0 || (output.values != nil && output.modes != nil),
+              shapeCount == 0 || output.shapes != nil else { throw V8EngineError.invalidOutput }
+        let shapes = UnsafeBufferPointer(start: output.shapes, count: shapeCount * 3)
+        let values = UnsafeBufferPointer(start: output.values, count: count * 8)
+        let modes = UnsafeBufferPointer(start: output.modes, count: count)
+        var result: [Laser3DShape] = []; result.reserveCapacity(shapeCount)
+        for index in 0..<shapeCount {
+            guard let start = Int(exactly: shapes[index * 3 + 1]), let length = Int(exactly: shapes[index * 3 + 2]),
+                  start <= count, length <= count - start else { throw V8EngineError.invalidOutput }
+            var vertices: [LaserVertex] = []; vertices.reserveCapacity(length)
+            for vertex in start..<(start + length) {
                 let i = vertex * 8
                 guard let mode = LaserPointMode(rawValue: modes[vertex]), values[i..<(i + 8)].allSatisfy(\.isFinite) else { throw V8EngineError.invalidOutput }
                 vertices.append(LaserVertex(position: SIMD4(values[i], values[i+1], values[i+2], values[i+3]),
@@ -97,5 +64,57 @@ private struct Output: Decodable {
             result.append(Laser3DShape(id: LaserShapeID(shapes[index * 3]), vertices: vertices))
         }
         return result
+    }
+}
+
+private struct PackedInputs {
+    struct Range {
+        let vertexOffset: Int
+        let shapeOffset: Int
+        let vertexCount: Int
+        let shapeCount: Int
+    }
+
+    var values: [Double] = []
+    var modes: [UInt16] = []
+    var shapes: [UInt32] = []
+    var ranges: [Range] = []
+
+    init(_ inputs: [[Laser3DShape]]) throws {
+        for stream in inputs {
+            let vertexOffset = modes.count, shapeOffset = shapes.count
+            guard UInt32(exactly: stream.count) != nil, stream.count <= (Int.max - shapeOffset) / 3 else { throw V8EngineError.invalidInput }
+            var localOffset: UInt32 = 0
+            for shape in stream {
+                guard let length = UInt32(exactly: shape.vertices.count),
+                      length <= UInt32.max - localOffset,
+                      shape.vertices.count <= (Int.max - values.count) / 8 else { throw V8EngineError.invalidInput }
+                shapes.append(contentsOf: [shape.id.rawValue, localOffset, length])
+                localOffset += length
+                for vertex in shape.vertices {
+                    values.append(contentsOf: [vertex.position.x, vertex.position.y, vertex.position.z, vertex.position.w,
+                                               vertex.rgba.x, vertex.rgba.y, vertex.rgba.z, vertex.rgba.w])
+                    modes.append(vertex.mode.rawValue)
+                }
+            }
+            ranges.append(Range(vertexOffset: vertexOffset, shapeOffset: shapeOffset,
+                                vertexCount: Int(localOffset), shapeCount: stream.count))
+        }
+    }
+
+    func withInputs<Result>(_ body: (UnsafeBufferPointer<XLaserV8Input>) -> Result) -> Result {
+        values.withUnsafeBufferPointer { values in
+            modes.withUnsafeBufferPointer { modes in
+                shapes.withUnsafeBufferPointer { shapes in
+                    let descriptors = ranges.map { range in
+                        XLaserV8Input(values: values.baseAddress?.advanced(by: range.vertexOffset * 8),
+                                      modes: modes.baseAddress?.advanced(by: range.vertexOffset),
+                                      shapes: shapes.baseAddress?.advanced(by: range.shapeOffset),
+                                      vertex_count: range.vertexCount, shape_count: range.shapeCount)
+                    }
+                    return descriptors.withUnsafeBufferPointer(body)
+                }
+            }
+        }
     }
 }

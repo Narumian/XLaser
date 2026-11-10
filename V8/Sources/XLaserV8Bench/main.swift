@@ -20,6 +20,6 @@ for _ in 0..<iterations {
 }
 guard vertexCount == iterations * 1000 else { throw BenchError.invalidOutput }
 let milliseconds = Double(DispatchTime.now().uptimeNanoseconds - start) / 1e6 / Double(iterations)
-print("v8-json-passthrough shapes=10 vertices=1000 ms/read=\(String(format: "%.3f", milliseconds))")
+print("v8-typed-passthrough shapes=10 vertices=1000 ms/read=\(String(format: "%.3f", milliseconds))")
 
 enum BenchError: Error { case invalidOutput }
