@@ -2,7 +2,6 @@ const fs = require("node:fs");
 const path = require("node:path");
 const vm = require("node:vm");
 
-// This host and its object-based output are for experimentation only.
 const source = fs.readFileSync(path.join(__dirname, "RotatingLine.js"), "utf8");
 const header = /^\/\*([\s\S]*?)\*\//.exec(source);
 if (!header) throw new Error("Missing JSON header");

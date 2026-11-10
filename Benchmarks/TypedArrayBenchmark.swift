@@ -3,7 +3,6 @@ import Foundation
 import JavaScriptCore
 import XLaser
 
-// Experimental benchmark only: copied typed arrays, no shared native storage.
 final class TypedArrayBenchmark {
     private let context: JSContext
     private let run: JSValue

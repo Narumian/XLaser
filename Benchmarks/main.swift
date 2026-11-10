@@ -115,7 +115,6 @@ do {
     _ = try checkEngine.read(count: 3, input: nil)
     throw BenchError.invalidOutput
 } catch TypedArrayBenchmark.Failure.capacity {
-    // Capacity overflow is reported rather than writing beyond the buffer.
 }
 
 func benchmarkStreamBuffer() throws {

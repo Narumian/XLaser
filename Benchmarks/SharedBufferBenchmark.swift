@@ -3,7 +3,6 @@ import Foundation
 import JavaScriptCore
 import XLaser
 
-// Experimental fixed-capacity buffers retained by JavaScriptCore; not a public engine API.
 final class SharedBufferBenchmark {
     private let context: JSContext
     private let run: JSValue
