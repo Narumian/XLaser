@@ -1,0 +1,1 @@
+class Laser3DStream {}
