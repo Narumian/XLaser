@@ -10,7 +10,7 @@ public enum JavaScriptCoreEngineError: Error, Equatable {
     case stopped
 }
 
-public final class JavaScriptCoreEngine {
+public final class JavaScriptCoreEngine: LaserScriptEngine {
     private let context: JSContext
     private let invoke: JSValue
     private var stopped = false
@@ -23,9 +23,9 @@ public final class JavaScriptCoreEngine {
             throw JavaScriptCoreEngineError.javaScript(exception.toString() ?? "JavaScript exception")
         }
         let invoke = context.evaluateScript("""
-        (function(context) {
+        (function(context, inputs) {
             const output = { shapes: [], addShape(id, vertices) { this.shapes.push({ id, vertices }); } };
-            read(context, [], output);
+            read(context, inputs, output);
             return JSON.stringify(output.shapes);
         })
         """)
@@ -36,10 +36,19 @@ public final class JavaScriptCoreEngine {
         self.invoke = invoke
     }
 
-    public func read(time: Double, sampleRate: Double, frameLength: Int) throws -> [Laser3DShape] {
+    public func read(context readContext: LaserScriptReadContext, inputs: [[Laser3DShape]]) throws -> [Laser3DShape] {
         guard !stopped else { throw JavaScriptCoreEngineError.stopped }
         context.exception = nil
-        let value = invoke.call(withArguments: [["time": time, "sampleRate": sampleRate, "frameLength": frameLength]])
+        let encodedInputs: [[[String: Any]]] = inputs.map { stream in
+            stream.map { shape in
+                ["id": shape.id.rawValue, "vertices": shape.vertices.map { vertex in
+                    ["position": [vertex.position.x, vertex.position.y, vertex.position.z, vertex.position.w],
+                     "rgba": [vertex.rgba.x, vertex.rgba.y, vertex.rgba.z, vertex.rgba.w],
+                     "mode": vertex.mode.rawValue] as [String: Any]
+                }] as [String: Any]
+            }
+        }
+        let value = invoke.call(withArguments: [["time": readContext.time, "sampleRate": readContext.sampleRate, "frameLength": readContext.frameLength], encodedInputs])
         if let exception = context.exception {
             stopped = true
             throw JavaScriptCoreEngineError.javaScript(exception.toString() ?? "JavaScript exception")

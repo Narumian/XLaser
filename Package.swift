@@ -10,6 +10,7 @@ let package = Package(
     targets: [
         .target(name: "LaserScriptKit"),
         .target(name: "LaserScriptKitApple", dependencies: ["LaserScriptKit"], path: "Sources/Apple"),
+        .executableTarget(name: "LaserScriptBench", dependencies: ["LaserScriptKit", "LaserScriptKitApple"], path: "Benchmarks"),
         .testTarget(name: "LaserScriptKitAppleTests", dependencies: ["LaserScriptKitApple", "LaserScriptKit"]),
     ]
 )
