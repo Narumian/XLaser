@@ -100,6 +100,25 @@ do {
     // Capacity overflow is reported rather than writing beyond the buffer.
 }
 
+func benchmarkStreamBuffer() throws {
+    var buffer = Laser3DBuffer()
+    try buffer.reserveCapacity(shapes: 10, vertices: 1000)
+    let vertex = LaserVertex(x: 0.5, y: 0.25)
+    let iterations = 1000
+    let start = DispatchTime.now().uptimeNanoseconds
+    for _ in 0..<iterations {
+        buffer.removeAll()
+        for shape in 0..<10 {
+            try buffer.beginShape(id: LaserShapeID(UInt32(shape)))
+            for _ in 0..<100 { try buffer.appendVertex(vertex) }
+        }
+    }
+    let seconds = Double(DispatchTime.now().uptimeNanoseconds - start) / 1e9
+    guard buffer.vertexCount == 1000, buffer.shapeCount == 10 else { throw BenchError.invalidOutput }
+    print("swift-buffer shapes=10 vertices=1000 reads=\(iterations) ms/read=\(String(format: "%.3f", seconds * 1000 / Double(iterations)))")
+}
+try benchmarkStreamBuffer()
+
 let sharedCheck = try SharedBufferBenchmark(capacity: 2)
 guard try sharedCheck.read(count: 2, input: checkInput) == checkInput,
       try sharedCheck.read(count: 0, input: []) == [],

@@ -68,15 +68,8 @@ public struct Laser3DShape: Equatable, Sendable {
     public static let blackCenter = Laser3DShape(id: 0, vertices: [LaserVertex(x: 0, y: 0, rgba: .zero, mode: .blank)])
 }
 
-/// A source of shapes in the front half of the pipeline (3D, `LaserVertex`).
-///
-/// Each `read` answers with the shapes of one frame, every one of them whole: a shape
-/// is never split over two reads, and the end of the array is the end of the frame.
-/// An empty array means there is nothing to draw now, not that the stream is over.
-/// `read` never waits, so a real-time pump can call it. A source makes its frame on the
-/// spot, from the absolute time it reads itself, and keeps no frame to repeat.
-///
-/// Everything after the projection is a `Laser2DStream` of scanner samples.
+/// A nonblocking source of complete 3D shapes. Each read replaces the output contents.
+/// An empty output means there is nothing to draw now, not that the stream has ended.
 public protocol Laser3DStream: Sendable {
-    mutating func read() -> [Laser3DShape]
+    mutating func read(into output: inout Laser3DBuffer)
 }
