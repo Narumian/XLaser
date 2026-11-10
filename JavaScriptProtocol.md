@@ -11,7 +11,10 @@ For example (the header key, version, and function name are illustrative):
 
 ```javascript
 /*{
-  "LASERSCRIPT": "1.0"
+  "LASERSCRIPT": "1.0",
+  "INPUTS": [
+    { "NAME": "speed", "TYPE": "float", "DEFAULT": 1.0, "MIN": 0.0, "MAX": 10.0 }
+  ]
 }*/
 
 function render(context) {
