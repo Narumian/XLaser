@@ -80,6 +80,44 @@ final class V8EngineTests: XCTestCase {
         }
     }
 
+    func testHostOutputGrowthPreservesDataAndOldViews() throws {
+        let source = """
+        let oldView;
+        function read(c, inputs, output) {
+            if (oldView) oldView[0] = 77;
+            output.beginShape(17);
+            output.addVertex(1, 2, 3, 1, 1, 1, 1, 1, 0);
+            const firstView = output.values;
+            for (let i = 0; i < 32; i++) output.addVertex(i, 0, 0, 1, 1, 1, 1, 1, 0);
+            if (firstView !== output.values) {
+                oldView = firstView;
+                oldView[0] = 99;
+            }
+        }
+        """
+        let engine = try V8Engine(source: source)
+        let context = LaserScriptReadContext(time: 0, sampleRate: 30000, frameLength: 1)
+        for _ in 0..<2 {
+            let shapes = try engine.read(context: context, inputs: [])
+            XCTAssertEqual(shapes.count, 1)
+            XCTAssertEqual(shapes[0].vertices.count, 33)
+            XCTAssertEqual(shapes[0].vertices[0].position.x, 1)
+            XCTAssertEqual(shapes[0].vertices[32].position.x, 31)
+        }
+    }
+
+    func testInvalidHostAllocationStopsAsset() throws {
+        let engine = try V8Engine(source: "function read(c, i, o) { o.allocate('float64', -1); }")
+        let context = LaserScriptReadContext(time: 0, sampleRate: 30000, frameLength: 1)
+        XCTAssertThrowsError(try engine.read(context: context, inputs: [])) { error in
+            guard case V8EngineError.javaScript(let message) = error else { return XCTFail("Unexpected error: \(error)") }
+            XCTAssertTrue(message.contains("Invalid buffer size"))
+        }
+        XCTAssertThrowsError(try engine.read(context: context, inputs: [])) { error in
+            XCTAssertEqual(error as? V8EngineError, .stopped)
+        }
+    }
+
     func testExceptionStopsAsset() throws {
         let engine = try V8Engine(source: "function read() { throw new Error('broken'); }")
         let context = LaserScriptReadContext(time: 0, sampleRate: 30000, frameLength: 1)

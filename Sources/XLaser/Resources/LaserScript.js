@@ -1,10 +1,18 @@
 class LaserScript {}
 
+function allocateLaserArray(type, count) {
+  if (type === "float64") return new Float64Array(count);
+  if (type === "uint16") return new Uint16Array(count);
+  if (type === "uint32") return new Uint32Array(count);
+  throw new TypeError("Invalid buffer type");
+}
+
 class Laser3DStream {
-  constructor() {
-    this.values = new Float64Array(8 * 16);
-    this.modes = new Uint16Array(16);
-    this.shapes = new Uint32Array(3 * 4);
+  constructor(allocate = allocateLaserArray) {
+    this.allocate = allocate;
+    this.values = allocate("float64", 8 * 16);
+    this.modes = allocate("uint16", 16);
+    this.shapes = allocate("uint32", 3 * 4);
     this.vertexCount = 0;
     this.shapeCount = 0;
   }
@@ -19,7 +27,7 @@ class Laser3DStream {
       throw new RangeError("Invalid shape ID");
     if (this.shapeCount >= 0xffffffff) throw new RangeError("Too many shapes");
     if ((this.shapeCount + 1) * 3 > this.shapes.length) {
-      const next = new Uint32Array(this.shapes.length * 2);
+      const next = this.allocate("uint32", this.shapes.length * 2);
       next.set(this.shapes);
       this.shapes = next;
     }
@@ -38,8 +46,8 @@ class Laser3DStream {
         !Number.isInteger(mode) || mode < 0 || mode > 2)
       throw new TypeError("Invalid vertex");
     if (this.vertexCount >= this.modes.length) {
-      const modes = new Uint16Array(this.modes.length * 2);
-      const values = new Float64Array(this.values.length * 2);
+      const modes = this.allocate("uint16", this.modes.length * 2);
+      const values = this.allocate("float64", this.values.length * 2);
       modes.set(this.modes);
       values.set(this.values);
       this.modes = modes;
@@ -68,13 +76,13 @@ class Laser3DStream {
     if (vertices > 0xffffffff || shapes > 0xffffffff) throw new RangeError("Stream too large");
     if (this.modes.length < vertices) {
       const size = Math.max(vertices, this.modes.length * 2);
-      const modes = new Uint16Array(size);
-      const values = new Float64Array(size * 8);
+      const modes = this.allocate("uint16", size);
+      const values = this.allocate("float64", size * 8);
       modes.set(this.modes); values.set(this.values);
       this.modes = modes; this.values = values;
     }
     if (this.shapes.length < shapes * 3) {
-      const next = new Uint32Array(Math.max(shapes * 3, this.shapes.length * 2));
+      const next = this.allocate("uint32", Math.max(shapes * 3, this.shapes.length * 2));
       next.set(this.shapes); this.shapes = next;
     }
     this.values.set(input.values.subarray(0, input.vertexCount * 8), this.vertexCount * 8);
