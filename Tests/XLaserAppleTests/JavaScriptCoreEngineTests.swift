@@ -3,6 +3,7 @@ import XCTest
 import Foundation
 import XLaserApple
 import XLaser
+import XLaserStandardLibrary
 
 final class JavaScriptCoreEngineTests: XCTestCase {
     private let context = LaserReadContext(time: 0, sampleRate: 30000, frameLength: 1)
@@ -306,6 +307,72 @@ final class JavaScriptCoreEngineTests: XCTestCase {
             XCTAssertEqual(error as? JavaScriptCoreEngineError, .invalidOutput)
         }
         XCTAssertTrue(output.isEmpty)
+    }
+
+    private func standardSource(_ category: LaserStandardLibrary.Category, _ filename: String) throws -> String {
+        let url = try XCTUnwrap(LaserStandardLibrary.urls(in: category).first { $0.lastPathComponent == filename })
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    func testStandardAnimationsAndContinuousSpeed() throws {
+        XCTAssertEqual(try LaserStandardLibrary.urls(in: .animations).map(\.lastPathComponent), ["PulsingCircle.js", "RotatingLine.js"])
+        let line: any LaserScriptable = try JavaScriptCoreEngine(source: standardSource(.animations, "RotatingLine.js"))
+        var output = Laser3DBuffer()
+        try line.read(context: context, inputs: [:], output: &output)
+        XCTAssertEqual(output.vertexCount, 2)
+        XCTAssertEqual(output.vertex(at: 1).position.x, 0.5, accuracy: 1e-12)
+        let oneSecond = LaserReadContext(time: 1, sampleRate: 30000, frameLength: 100)
+        try line.read(context: oneSecond, inputs: [:], output: &output)
+        XCTAssertEqual(output.vertex(at: 1).position.x, 0.5 * cos(1), accuracy: 1e-12)
+        let before = output
+        try line.read(context: oneSecond, inputs: ["speed": .float(2)], output: &output)
+        XCTAssertEqual(output, before)
+        try line.read(context: .init(time: 2, sampleRate: 30000, frameLength: 100), inputs: ["speed": .float(2)], output: &output)
+        XCTAssertEqual(output.vertex(at: 1).position.x, 0.5 * cos(3), accuracy: 1e-12)
+
+        let circle: any LaserScriptable = try JavaScriptCoreEngine(source: standardSource(.animations, "PulsingCircle.js"))
+        try circle.read(context: context, inputs: [:], output: &output)
+        XCTAssertEqual(output.vertexCount, 65)
+        XCTAssertEqual(output.vertex(at: 0).position.x, 0.375, accuracy: 1e-12)
+        XCTAssertEqual(output.vertex(at: 0), output.vertex(at: 64))
+        try circle.read(context: .init(time: 0.5, sampleRate: 30000, frameLength: 10), inputs: [:], output: &output)
+        XCTAssertEqual(output.vertex(at: 0).position.x, 0.5, accuracy: 1e-12)
+        let atHalfSecond = output
+        try circle.read(context: .init(time: 0.5, sampleRate: 30000, frameLength: 10), inputs: ["speed": .float(2)], output: &output)
+        XCTAssertEqual(output, atHalfSecond)
+    }
+
+    func testStandardEffectsPreserveShapesAndModes() throws {
+        XCTAssertEqual(try LaserStandardLibrary.urls(in: .effects).map(\.lastPathComponent), ["Colorize.js", "Rotate.js"])
+        let normal = LaserVertex(x: 1, y: 0, z: 2, w: 0.5, rgba: SIMD4(0.2, 0.4, 0.6, 0.8), mode: .dwell)
+        let blank = LaserVertex(x: 0, y: 1, rgba: SIMD4(0.3, 0.6, 0.9, 0.7), mode: .blank)
+        let input = try buffer([(42, [normal, blank]), (7, [])])
+        let rotate: any LaserScriptable = try JavaScriptCoreEngine(source: standardSource(.effects, "Rotate.js"))
+        var output = Laser3DBuffer()
+        try rotate.read(context: context, inputs: [:], output: &output)
+        XCTAssertTrue(output.isEmpty)
+        try rotate.read(context: context, inputs: ["source": .laser(input), "angle": .float(90)], output: &output)
+        XCTAssertEqual(output.shapes.map(\.id.rawValue), [42, 7])
+        XCTAssertEqual(output.shapes.map(\.count), [2, 0])
+        let turned = output.vertex(at: 0)
+        XCTAssertEqual(turned.position.x, 0, accuracy: 1e-12)
+        XCTAssertEqual(turned.position.y, 1, accuracy: 1e-12)
+        XCTAssertEqual(turned.position.z, 2)
+        XCTAssertEqual(turned.position.w, 0.5)
+        XCTAssertEqual(turned.rgba, normal.rgba)
+        XCTAssertEqual(turned.mode, .dwell)
+        XCTAssertEqual(output.vertex(at: 1).mode, .blank)
+
+        let colorize: any LaserScriptable = try JavaScriptCoreEngine(source: standardSource(.effects, "Colorize.js"))
+        try colorize.read(context: context, inputs: ["source": .laser(input), "color": .color(SIMD4(1, 0, 0, 0.5)), "mix": .float(0.5)], output: &output)
+        XCTAssertEqual(output.shapes.map(\.id.rawValue), [42, 7])
+        XCTAssertEqual(output.vertex(at: 0).rgba.x, 0.6, accuracy: 1e-12)
+        XCTAssertEqual(output.vertex(at: 0).rgba.y, 0.2, accuracy: 1e-12)
+        XCTAssertEqual(output.vertex(at: 0).rgba.z, 0.3, accuracy: 1e-12)
+        XCTAssertEqual(output.vertex(at: 0).rgba.w, 0.65, accuracy: 1e-12)
+        XCTAssertEqual(output.vertex(at: 0).mode, .dwell)
+        XCTAssertEqual(output.vertex(at: 1), blank)
+        XCTAssertEqual(input.vertex(at: 0), normal)
     }
 
     func testNamedLaserAndFloatInputs() throws {

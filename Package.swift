@@ -17,9 +17,11 @@ let package = Package(
         .library(name: "XLaserApple", targets: ["XLaserApple"]),
         .library(name: "XLaserV8", targets: ["XLaserV8"]),
         .library(name: "LaserCubeImplementation", targets: ["LaserCubeImplementation"]),
+        .library(name: "XLaserStandardLibrary", targets: ["XLaserStandardLibrary"]),
     ],
     targets: [
         .target(name: "XLaser", resources: [.copy("Resources/LaserScript.js")]),
+        .target(name: "XLaserStandardLibrary", path: "StandardLibrary", resources: [.copy("Animations"), .copy("Effects")]),
         .target(name: "LaserCubeImplementation", dependencies: ["XLaser"]),
         .target(name: "XLaserApple", dependencies: ["XLaser"], path: "Sources/Apple"),
         .target(name: "CV8Bridge", cxxSettings: v8CXXSettings, linkerSettings: v8LinkerSettings),
@@ -29,8 +31,8 @@ let package = Package(
         .executableTarget(name: "XLaserV8Bench", dependencies: ["XLaser", "XLaserV8"], path: "Tools/V8Bench"),
         .testTarget(name: "XLaserTests", dependencies: ["XLaser"]),
         .testTarget(name: "LaserCubeImplementationTests", dependencies: ["LaserCubeImplementation", "XLaser"]),
-        .testTarget(name: "XLaserAppleTests", dependencies: ["XLaserApple", "XLaser"]),
-        .testTarget(name: "XLaserV8Tests", dependencies: ["XLaserV8", "XLaser"]),
+        .testTarget(name: "XLaserAppleTests", dependencies: ["XLaserApple", "XLaser", "XLaserStandardLibrary"]),
+        .testTarget(name: "XLaserV8Tests", dependencies: ["XLaserV8", "XLaser", "XLaserStandardLibrary"]),
     ],
     cxxLanguageStandard: .cxx20
 )
