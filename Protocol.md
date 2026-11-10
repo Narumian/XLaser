@@ -22,6 +22,7 @@ The output supports a variable number of shapes and vertices. `frameLength` is a
 ## Input
 
 An asset's laser inputs use the same 3D shape semantics as its output, aligned with `Laser3DStream`. Each read operates on the shape data provided for that read.
+Inputs are read-only and valid only during the current read. The asset must not modify inputs or retain references to them after the read. Behavior on violation is undefined.
 
 ## Buffer management
 
