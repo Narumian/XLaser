@@ -23,6 +23,10 @@ The output supports a variable number of shapes and vertices. `frameLength` is a
 
 An asset's laser inputs use the same 3D shape semantics as its output, aligned with `Laser3DStream`. Each read operates on the shape data provided for that read.
 
+## Buffer management
+
+The host provides and manages the input and output buffers. The asset must be able to request output buffer growth through a host-provided mechanism.
+
 ## Vertex precision
 
 Position and color components use 64-bit floating-point values.
