@@ -22,6 +22,46 @@ public struct Laser3DBuffer: Sendable, Equatable {
     public var shapeCount: Int { shapeStorage.count }
     public var vertexCount: Int { modeStorage.count }
     public var isEmpty: Bool { shapeStorage.isEmpty }
+    public var shapes: [Laser3DShapeRange] { shapeStorage }
+
+    public func vertex(at index: Int) -> LaserVertex {
+        let offset = index * 8
+        return LaserVertex(position: SIMD4(vertexStorage[offset], vertexStorage[offset + 1], vertexStorage[offset + 2], vertexStorage[offset + 3]),
+                           rgba: SIMD4(vertexStorage[offset + 4], vertexStorage[offset + 5], vertexStorage[offset + 6], vertexStorage[offset + 7]),
+                           mode: LaserPointMode(rawValue: modeStorage[index])!)
+    }
+
+    public func mapVertices(_ transform: (LaserVertex, Int, Int) -> LaserVertex) -> Laser3DBuffer {
+        var result = self
+        for shape in shapeStorage {
+            for index in 0..<Int(shape.count) {
+                let vertexIndex = Int(shape.start) + index
+                let vertex = transform(vertex(at: vertexIndex), index, Int(shape.count))
+                let offset = vertexIndex * 8
+                result.vertexStorage[offset] = vertex.position.x; result.vertexStorage[offset + 1] = vertex.position.y
+                result.vertexStorage[offset + 2] = vertex.position.z; result.vertexStorage[offset + 3] = vertex.position.w
+                result.vertexStorage[offset + 4] = vertex.rgba.x; result.vertexStorage[offset + 5] = vertex.rgba.y
+                result.vertexStorage[offset + 6] = vertex.rgba.z; result.vertexStorage[offset + 7] = vertex.rgba.w
+                result.modeStorage[vertexIndex] = vertex.mode.rawValue
+            }
+        }
+        return result
+    }
+
+    public func mapShapeIDs(_ transform: (LaserShapeID) -> LaserShapeID) -> Laser3DBuffer {
+        var result = self
+        result.shapeStorage = shapeStorage.map { Laser3DShapeRange(id: transform($0.id), start: $0.start, count: $0.count) }
+        return result
+    }
+
+    public mutating func append(contentsOf other: Laser3DBuffer) throws {
+        guard UInt64(vertexCount) + UInt64(other.vertexCount) <= UInt64(UInt32.max),
+              other.vertexCount <= (Int.max / 8) - vertexCount else { throw Laser3DBufferError.vertexLimitExceeded }
+        let offset = UInt32(vertexCount)
+        shapeStorage.append(contentsOf: other.shapeStorage.map { Laser3DShapeRange(id: $0.id, start: $0.start + offset, count: $0.count) })
+        vertexStorage.append(contentsOf: other.vertexStorage)
+        modeStorage.append(contentsOf: other.modeStorage)
+    }
 
     public mutating func reserveCapacity(shapes: Int, vertices: Int) throws {
         guard shapes >= 0, vertices >= 0, UInt64(vertices) <= UInt64(UInt32.max), vertices <= Int.max / 8 else {

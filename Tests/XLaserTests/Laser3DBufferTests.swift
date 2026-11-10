@@ -2,6 +2,27 @@ import XCTest
 import XLaser
 
 final class Laser3DBufferTests: XCTestCase {
+    func testMappingAndAppendingPreserveShapeRanges() throws {
+        var input = Laser3DBuffer()
+        try input.beginShape(id: 4)
+        try input.appendVertex(LaserVertex(x: 1, y: 2))
+        try input.appendVertex(LaserVertex(x: 3, y: 4))
+        try input.beginShape(id: 8)
+        let mapped = input.mapVertices { vertex, index, count in
+            var vertex = vertex
+            vertex.position.x += Double(index + count)
+            return vertex
+        }.mapShapeIDs { LaserShapeID($0.rawValue + 10) }
+        var output = input
+        try output.append(contentsOf: mapped)
+        XCTAssertEqual(output.shapes.map(\.id.rawValue), [4, 8, 14, 18])
+        XCTAssertEqual(output.shapes.map(\.start), [0, 2, 2, 4])
+        XCTAssertEqual(output.shapes.map(\.count), [2, 0, 2, 0])
+        XCTAssertEqual(output.vertex(at: 2).position.x, 3)
+        XCTAssertEqual(output.vertex(at: 3).position.x, 6)
+        XCTAssertEqual(input.vertex(at: 0).position.x, 1)
+    }
+
     func testShapesAndVerticesUseContiguousBuffers() throws {
         var buffer = Laser3DBuffer()
         try buffer.reserveCapacity(shapes: 3, vertices: 2)
