@@ -7,7 +7,7 @@ function allocateLaserArray(type, count) {
   throw new TypeError("Invalid buffer type");
 }
 
-class Laser3DStream {
+class Laser3DBuffer {
   constructor(allocate = allocateLaserArray) {
     this.allocate = allocate;
     this.values = allocate("float64", 8 * 16);

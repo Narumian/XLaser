@@ -38,7 +38,7 @@ public final class JavaScriptCoreEngine: LaserScriptEngine {
         }
         let invoke = context.evaluateScript("""
         (function() {
-            const output = new Laser3DStream();
+            const output = new Laser3DBuffer();
             return function(context, inputs) {
                 output.reset();
                 read(context, inputs, output);

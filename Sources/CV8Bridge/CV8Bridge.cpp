@@ -114,7 +114,7 @@ XLaserV8Runtime *xlv8_create(const char *runtime_source, const char *source) {
         v8::TryCatch caught(runtime->isolate);
         v8::Local<v8::Value> result, maker;
         const char *wrapper = R"JS((function(allocate) {
-            const output = new Laser3DStream(allocate);
+            const output = new Laser3DBuffer(allocate);
             return function(context, inputs) {
                 output.reset();
                 read(context, inputs, output);

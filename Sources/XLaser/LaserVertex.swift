@@ -3,12 +3,6 @@ import Foundation
 import simd
 #endif
 
-public struct LaserShapeID: Hashable, Sendable, ExpressibleByIntegerLiteral {
-    public var rawValue: UInt32
-    public init(_ rawValue: UInt32) { self.rawValue = rawValue }
-    public init(integerLiteral value: UInt32) { rawValue = value }
-}
-
 public struct LaserVertex: Equatable, Sendable {
     public typealias Mode = LaserPointMode
 
@@ -32,8 +26,4 @@ public struct LaserVertex: Equatable, Sendable {
     public func transformed(by matrix: simd_double4x4) -> LaserVertex { var v = self; v.position = matrix * position; return v }
 #endif
     public func scaledAlpha(_ alpha: Double) -> LaserVertex { var v = self; v.rgba.w *= alpha; return v }
-}
-
-public protocol Laser3DStream: Sendable {
-    mutating func read(into output: inout Laser3DBuffer)
 }

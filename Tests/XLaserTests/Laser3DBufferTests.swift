@@ -42,22 +42,6 @@ final class Laser3DBufferTests: XCTestCase {
         XCTAssertEqual(buffer.vertexCount, 0)
     }
 
-    func testStreamReplacesOutput() throws {
-        struct Source: Laser3DStream {
-            func read(into output: inout Laser3DBuffer) {
-                output.removeAll()
-                try? output.beginShape(id: 5)
-                try? output.appendVertex(LaserVertex(x: 1, y: 2))
-            }
-        }
-        var buffer = Laser3DBuffer()
-        var stream: any Laser3DStream = Source()
-        stream.read(into: &buffer)
-        stream.read(into: &buffer)
-        XCTAssertEqual(buffer.shapeCount, 1)
-        XCTAssertEqual(buffer.vertexCount, 1)
-    }
-
     func testInvalidReplacementLeavesExistingBufferUnchanged() throws {
         var buffer = Laser3DBuffer()
         try buffer.beginShape(id: 7)

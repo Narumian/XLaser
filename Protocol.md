@@ -20,13 +20,15 @@ Both values are hints. The asset is not required to produce exactly `frameLength
 
 ## Output
 
-The host provides a reusable output buffer for the asset to write into. The output represents 3D shapes before projection, with semantics aligned with XLive's `Laser3DStream`.
+The host provides a reusable output buffer for the asset to write into. The output represents 3D shapes before projection.
+
+Each shape has an identifier and a range of vertices. Each vertex has a four-component position, a four-component RGBA color, and a point mode: normal, dwell, or blank.
 
 The output supports a variable number of shapes and vertices. `frameLength` is a hint, not a strict output limit.
 
 ## Input
 
-An asset's laser inputs use the same 3D shape semantics as its output, aligned with `Laser3DStream`. Each read operates on the shape data provided for that read.
+An asset's laser inputs use the same 3D shape representation as its output. Each read operates on the shape data provided for that read.
 Inputs are read-only and valid only during the current read. The asset must not modify inputs or retain references to them after the read. Behavior on violation is undefined.
 
 ## Buffer management
