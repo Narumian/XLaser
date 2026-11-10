@@ -23,6 +23,12 @@ public struct Laser3DBuffer: Sendable, Equatable {
     public var vertexCount: Int { modeStorage.count }
     public var isEmpty: Bool { shapeStorage.isEmpty }
     public var shapes: [Laser3DShapeRange] { shapeStorage }
+    /// Interleaved `position4 + rgba4` Float32 values. Returning the Swift
+    /// array uses copy-on-write, so readers can retain a snapshot without
+    /// eagerly duplicating the vertex payload.
+    public var vertexValues: [Float] { vertexStorage }
+    /// Per-vertex laser modes, parallel to `vertexValues` in groups of eight.
+    public var vertexModes: [UInt16] { modeStorage }
 
     public func vertex(at index: Int) -> LaserVertex {
         let offset = index * 8
