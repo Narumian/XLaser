@@ -25,6 +25,7 @@ let package = Package(
         .target(name: "CV8Bridge", cxxSettings: v8CXXSettings, linkerSettings: v8LinkerSettings),
         .target(name: "XLaserV8", dependencies: ["XLaser", "CV8Bridge"], path: "Sources/V8"),
         .executableTarget(name: "LaserScriptBench", dependencies: ["XLaser", "XLaserApple"], path: "Benchmarks"),
+        .executableTarget(name: "XLaserInputBench", dependencies: ["XLaser", "XLaserApple", "XLaserV8"], path: "Tools/InputBench"),
         .executableTarget(name: "XLaserV8Bench", dependencies: ["XLaser", "XLaserV8"], path: "Tools/V8Bench"),
         .testTarget(name: "XLaserTests", dependencies: ["XLaser"]),
         .testTarget(name: "LaserCubeImplementationTests", dependencies: ["LaserCubeImplementation", "XLaser"]),
