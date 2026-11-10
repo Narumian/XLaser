@@ -10,7 +10,7 @@ func makeInput(vertices: Int, shapes: Int) throws -> Laser3DBuffer {
     for shape in 0..<shapes {
         try buffer.beginShape(id: LaserShapeID(UInt32(shape)))
         for vertex in (shape * vertices / shapes)..<((shape + 1) * vertices / shapes) {
-            try buffer.appendVertex(LaserVertex(x: Double(vertex) / Double(vertices), y: 0))
+            try buffer.appendVertex(LaserVertex(x: Float(vertex) / Float(vertices), y: 0))
         }
     }
     return buffer

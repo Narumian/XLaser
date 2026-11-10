@@ -80,7 +80,7 @@ private struct PackedInputs {
         let kind: Kind
     }
 
-    var values: [Double] = []
+    var values: [Float] = []
     var modes: [UInt16] = []
     var shapes: [UInt32] = []
     var bytes: [UInt8] = []

@@ -151,7 +151,7 @@ public final class JavaScriptCoreEngine: LaserScriptable {
         try buffer.withUnsafeBuffers { shapes, values, modes in
             var ranges: [UInt32] = []; ranges.reserveCapacity(shapes.count * 3)
             for shape in shapes { ranges.append(contentsOf: [shape.id.rawValue, shape.start, shape.count]) }
-            try writeArray(values, to: valueBuffer, type: kJSTypedArrayTypeFloat64Array)
+            try writeArray(values, to: valueBuffer, type: kJSTypedArrayTypeFloat32Array)
             try writeArray(modes, to: modeBuffer, type: kJSTypedArrayTypeUint16Array)
             try ranges.withUnsafeBufferPointer { try writeArray($0, to: shapeBuffer, type: kJSTypedArrayTypeUint32Array) }
         }
@@ -187,7 +187,7 @@ public final class JavaScriptCoreEngine: LaserScriptable {
             throw JavaScriptCoreEngineError.invalidOutput
         }
         let shapes: [UInt32] = try copyArray(shapeValue, count: shapeCount * 3, type: kJSTypedArrayTypeUint32Array)
-        let vertices: [Double] = try copyArray(vertexValue, count: vertexCount * 8, type: kJSTypedArrayTypeFloat64Array)
+        let vertices: [Float] = try copyArray(vertexValue, count: vertexCount * 8, type: kJSTypedArrayTypeFloat32Array)
         let modes: [UInt16] = try copyArray(modeValue, count: vertexCount, type: kJSTypedArrayTypeUint16Array)
         try shapes.withUnsafeBufferPointer { shapes in
             try vertices.withUnsafeBufferPointer { vertices in

@@ -79,7 +79,7 @@ const wave = Object.freeze({
 });
 
 function allocateLaserArray(type, count) {
-  if (type === "float64") return new Float64Array(count);
+  if (type === "float32") return new Float32Array(count);
   if (type === "uint16") return new Uint16Array(count);
   if (type === "uint32") return new Uint32Array(count);
   throw new TypeError("Invalid buffer type");
@@ -88,7 +88,7 @@ function allocateLaserArray(type, count) {
 class Laser3DBuffer {
   constructor(allocate = allocateLaserArray) {
     this.allocate = allocate;
-    this.values = allocate("float64", 8 * 16);
+    this.values = allocate("float32", 8 * 16);
     this.modes = allocate("uint16", 16);
     this.shapes = allocate("uint32", 3 * 4);
     this.vertexCount = 0;
@@ -117,7 +117,7 @@ class Laser3DBuffer {
     if (this.modes.length < vertices) {
       const size = Math.min(0xffffffff, Math.max(vertices, this.modes.length * 2));
       const modes = this.allocate("uint16", size);
-      const values = this.allocate("float64", size * 8);
+      const values = this.allocate("float32", size * 8);
       modes.set(this.modes); values.set(this.values);
       this.modes = modes; this.values = values;
     }
@@ -181,7 +181,7 @@ class Laser3DBuffer {
       throw new TypeError("Invalid vertex");
     if (this.vertexCount >= this.modes.length) {
       const modes = this.allocate("uint16", this.modes.length * 2);
-      const values = this.allocate("float64", this.values.length * 2);
+      const values = this.allocate("float32", this.values.length * 2);
       modes.set(this.modes);
       values.set(this.values);
       this.modes = modes;
@@ -201,7 +201,7 @@ class Laser3DBuffer {
   addVertices(values, modes) {
     if (this.reservation !== null) throw new Error("Uncommitted vertices");
     if (this.shapeCount === 0) throw new Error("A shape must be started first");
-    if (!(values instanceof Float64Array) || values.length % 8 !== 0 ||
+    if (!(values instanceof Float32Array) || values.length % 8 !== 0 ||
         (modes !== undefined && (!(modes instanceof Uint16Array) || values.length !== modes.length * 8)))
       throw new TypeError("Invalid vertex buffers");
     const start = this.vertexCount, count = values.length / 8;
@@ -218,7 +218,7 @@ class Laser3DBuffer {
     if (this.reservation !== null) throw new Error("Uncommitted vertices");
     if (!Number.isInteger(input.vertexCount) || input.vertexCount < 0 || input.vertexCount > 0xffffffff ||
         !Number.isInteger(input.shapeCount) || input.shapeCount < 0 || input.shapeCount > 0xffffffff ||
-        !(input.values instanceof Float64Array) || input.values.length < input.vertexCount * 8 ||
+        !(input.values instanceof Float32Array) || input.values.length < input.vertexCount * 8 ||
         !(input.modes instanceof Uint16Array) || input.modes.length < input.vertexCount ||
         !(input.shapes instanceof Uint32Array) || input.shapes.length < input.shapeCount * 3)
       throw new TypeError("Invalid input stream");
@@ -228,7 +228,7 @@ class Laser3DBuffer {
     if (this.modes.length < vertices) {
       const size = Math.max(vertices, this.modes.length * 2);
       const modes = this.allocate("uint16", size);
-      const values = this.allocate("float64", size * 8);
+      const values = this.allocate("float32", size * 8);
       modes.set(this.modes); values.set(this.values);
       this.modes = modes; this.values = values;
     }
@@ -319,7 +319,7 @@ class Laser3DBuffer {
 
 class Laser3DInput {
   constructor() {
-    this.values = new Float64Array(8 * 16);
+    this.values = new Float32Array(8 * 16);
     this.modes = new Uint16Array(16);
     this.shapes = new Uint32Array(3 * 4);
     this.vertexCount = 0;
@@ -330,7 +330,7 @@ class Laser3DInput {
     if (this.modes.length < vertexCount) {
       const size = Math.max(vertexCount, this.modes.length * 2);
       this.modes = new Uint16Array(size);
-      this.values = new Float64Array(size * 8);
+      this.values = new Float32Array(size * 8);
     }
     if (this.shapes.length < shapeCount * 3)
       this.shapes = new Uint32Array(Math.max(shapeCount * 3, this.shapes.length * 2));

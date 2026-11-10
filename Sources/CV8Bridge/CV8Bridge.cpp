@@ -74,7 +74,7 @@ static void allocate_buffer(const v8::FunctionCallbackInfo<v8::Value> &args) {
     v8::String::Utf8Value type(isolate, args[0]);
     const double requested = args[1].As<v8::Number>()->Value();
     size_t element_size = 0, maximum = 0;
-    if (*type && std::strcmp(*type, "float64") == 0) { element_size = sizeof(double); maximum = v8::Float64Array::kMaxLength; }
+    if (*type && std::strcmp(*type, "float32") == 0) { element_size = sizeof(float); maximum = v8::Float32Array::kMaxLength; }
     else if (*type && std::strcmp(*type, "uint16") == 0) { element_size = sizeof(uint16_t); maximum = v8::Uint16Array::kMaxLength; }
     else if (*type && std::strcmp(*type, "uint32") == 0) { element_size = sizeof(uint32_t); maximum = v8::Uint32Array::kMaxLength; }
     if (!element_size || !std::isfinite(requested) || requested < 0 || std::floor(requested) != requested || requested > static_cast<double>(maximum)) {
@@ -89,7 +89,7 @@ static void allocate_buffer(const v8::FunctionCallbackInfo<v8::Value> &args) {
     }
     auto backing = v8::ArrayBuffer::NewBackingStore(data, bytes, release_buffer, nullptr);
     auto buffer = v8::ArrayBuffer::New(isolate, std::move(backing));
-    if (element_size == sizeof(double)) args.GetReturnValue().Set(v8::Float64Array::New(buffer, 0, count));
+    if (element_size == sizeof(float)) args.GetReturnValue().Set(v8::Float32Array::New(buffer, 0, count));
     else if (element_size == sizeof(uint16_t)) args.GetReturnValue().Set(v8::Uint16Array::New(buffer, 0, count));
     else args.GetReturnValue().Set(v8::Uint32Array::New(buffer, 0, count));
 }
@@ -174,7 +174,7 @@ static bool get_count(v8::Local<v8::Value> value, size_t *count) {
 
 template <typename T>
 static bool output_view(v8::Local<v8::Value> value, size_t count, std::shared_ptr<v8::BackingStore> *owner, const T **result) {
-    if constexpr (std::is_same_v<T, double>) { if (!value->IsFloat64Array()) return false; }
+    if constexpr (std::is_same_v<T, float>) { if (!value->IsFloat32Array()) return false; }
     if constexpr (std::is_same_v<T, uint16_t>) { if (!value->IsUint16Array()) return false; }
     if constexpr (std::is_same_v<T, uint32_t>) { if (!value->IsUint32Array()) return false; }
     auto view = value.As<v8::TypedArray>();
@@ -255,21 +255,21 @@ int xlv8_read(XLaserV8Runtime *runtime, double time, double sample_rate, double 
         }
         if (input.kind != 0) { error_message = "Invalid input type"; return 1; }
         if (input.vertex_count > UINT32_MAX || input.shape_count > UINT32_MAX ||
-            input.vertex_count > std::numeric_limits<size_t>::max() / (8 * sizeof(double)) ||
+            input.vertex_count > std::numeric_limits<size_t>::max() / (8 * sizeof(float)) ||
             input.shape_count > std::numeric_limits<size_t>::max() / (3 * sizeof(uint32_t)) ||
             (input.vertex_count && (!input.values || !input.modes)) || (input.shape_count && !input.shapes)) {
             error_message = "Invalid input buffer"; return 1;
         }
-        auto value_buffer = v8::ArrayBuffer::New(isolate, input.vertex_count * 8 * sizeof(double));
+        auto value_buffer = v8::ArrayBuffer::New(isolate, input.vertex_count * 8 * sizeof(float));
         auto mode_buffer = v8::ArrayBuffer::New(isolate, input.vertex_count * sizeof(uint16_t));
         auto shape_buffer = v8::ArrayBuffer::New(isolate, input.shape_count * 3 * sizeof(uint32_t));
         if (input.vertex_count) {
-            std::memcpy(value_buffer->GetBackingStore()->Data(), input.values, input.vertex_count * 8 * sizeof(double));
+            std::memcpy(value_buffer->GetBackingStore()->Data(), input.values, input.vertex_count * 8 * sizeof(float));
             std::memcpy(mode_buffer->GetBackingStore()->Data(), input.modes, input.vertex_count * sizeof(uint16_t));
         }
         if (input.shape_count) std::memcpy(shape_buffer->GetBackingStore()->Data(), input.shapes, input.shape_count * 3 * sizeof(uint32_t));
         v8::Local<v8::Value> args[] = {
-            v8::Float64Array::New(value_buffer, 0, input.vertex_count * 8),
+            v8::Float32Array::New(value_buffer, 0, input.vertex_count * 8),
             v8::Uint16Array::New(mode_buffer, 0, input.vertex_count),
             v8::Uint32Array::New(shape_buffer, 0, input.shape_count * 3),
             v8::Number::New(isolate, static_cast<double>(input.vertex_count)),
@@ -290,7 +290,7 @@ int xlv8_read(XLaserV8Runtime *runtime, double time, double sample_rate, double 
     auto object = result.As<v8::Object>();
     v8::Local<v8::Value> shape_count_value, vertex_count_value, shapes, values, modes;
     size_t shape_count, vertex_count;
-    const double *output_values = nullptr;
+    const float *output_values = nullptr;
     const uint16_t *output_modes = nullptr;
     const uint32_t *output_shapes = nullptr;
     if (!get_property(isolate, context, object, "shapeCount", &shape_count_value) ||

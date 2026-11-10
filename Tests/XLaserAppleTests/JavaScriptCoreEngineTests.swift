@@ -51,7 +51,7 @@ final class JavaScriptCoreEngineTests: XCTestCase {
         XCTAssertEqual(output, try buffer([(77, [])]))
         try engine.read(context: context, inputs: ["first": .laser(second), "second": .laser(first)], output: &output)
         XCTAssertEqual(output, try buffer([(42, [b]), (91, [a]), (77, [])]))
-        let many = try buffer((0..<20).map { index in (UInt32(index), (0..<5).map { LaserVertex(x: Double(index), y: Double($0)) }) })
+        let many = try buffer((0..<20).map { index in (UInt32(index), (0..<5).map { LaserVertex(x: Float(index), y: Float($0)) }) })
         try engine.read(context: context, inputs: ["first": .laser(many)], output: &output)
         XCTAssertEqual(output, many)
     }
@@ -63,7 +63,7 @@ final class JavaScriptCoreEngineTests: XCTestCase {
                 output.beginShape(shape + 1);
                 for (let i = 0; i < 5; i++) output.addVertex(i, shape, 2, 1, 0.1, 0.2, 0.3, 0.4, 2);
             }
-            const values = new Float64Array(output.values.length + 8);
+            const values = new Float32Array(output.values.length + 8);
             values.set(output.values, 8);
             output.values = values.subarray(8);
         }
@@ -248,7 +248,7 @@ final class JavaScriptCoreEngineTests: XCTestCase {
           o.beginShape(1);
           o.addVertex(0,0,0,1,1,1,1,1);
           o.addVertex({ position: [0,0,0,1], rgba: [1,1,1,1] });
-          const values = new Float64Array([0,0,0,1,1,1,1,1, 0,0,0,1,1,1,1,1]);
+          const values = new Float32Array([0,0,0,1,1,1,1,1, 0,0,0,1,1,1,1,1]);
           if (reads++ === 0) o.addVertices(values, new Uint16Array([Mode.blank, Mode.dwell]));
           else o.addVertices(values);
           o.reserveVertices(2);
@@ -284,7 +284,7 @@ final class JavaScriptCoreEngineTests: XCTestCase {
           const old = o.values; o.reserve(20, 100);
           if (old === o.values || old[0] !== 0.25 || o.values[0] !== 0.25) throw new Error("Growth");
           old[0] = 9;
-          const v = new Float64Array(80 * 8), modes = new Uint16Array(80);
+          const v = new Float32Array(80 * 8), modes = new Uint16Array(80);
           for (let n=0;n<80;n++) { v[n*8]=n; v[n*8+3]=1; v[n*8+4]=1; v[n*8+5]=1; v[n*8+6]=1; v[n*8+7]=1; }
           o.addVertices(v, modes);
         }
@@ -300,7 +300,7 @@ final class JavaScriptCoreEngineTests: XCTestCase {
     }
 
     func testBulkInvalidVertexIsRejectedAtReadBoundary() throws {
-        let source = "function read(c,i,o) { o.beginShape(1); o.addVertices(new Float64Array([NaN,0,0,1,1,1,1,1]), new Uint16Array([0])); }"
+        let source = "function read(c,i,o) { o.beginShape(1); o.addVertices(new Float32Array([NaN,0,0,1,1,1,1,1]), new Uint16Array([0])); }"
         let engine = try JavaScriptCoreEngine(source: source)
         var output = Laser3DBuffer()
         XCTAssertThrowsError(try engine.read(context: context, inputs: [:], output: &output)) { error in

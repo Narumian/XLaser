@@ -14,7 +14,7 @@ public enum Laser3DBufferError: Error, Equatable, Sendable {
 
 public struct Laser3DBuffer: Sendable, Equatable {
     private var shapeStorage: [Laser3DShapeRange] = []
-    private var vertexStorage: [Double] = []
+    private var vertexStorage: [Float] = []
     private var modeStorage: [UInt16] = []
 
     public init() {}
@@ -95,7 +95,7 @@ public struct Laser3DBuffer: Sendable, Equatable {
     }
 
     public mutating func replaceContents(
-        shapes: UnsafeBufferPointer<UInt32>, values: UnsafeBufferPointer<Double>, modes: UnsafeBufferPointer<UInt16>
+        shapes: UnsafeBufferPointer<UInt32>, values: UnsafeBufferPointer<Float>, modes: UnsafeBufferPointer<UInt16>
     ) throws {
         guard shapes.count % 3 == 0, modes.count <= Int.max / 8, values.count == modes.count * 8,
               UInt64(modes.count) <= UInt64(UInt32.max) else { throw Laser3DBufferError.invalidShape }
@@ -115,7 +115,7 @@ public struct Laser3DBuffer: Sendable, Equatable {
     }
 
     public func withUnsafeBuffers<Result>(
-        _ body: (UnsafeBufferPointer<Laser3DShapeRange>, UnsafeBufferPointer<Double>, UnsafeBufferPointer<UInt16>) throws -> Result
+        _ body: (UnsafeBufferPointer<Laser3DShapeRange>, UnsafeBufferPointer<Float>, UnsafeBufferPointer<UInt16>) throws -> Result
     ) rethrows -> Result {
         try shapeStorage.withUnsafeBufferPointer { shapes in
             try vertexStorage.withUnsafeBufferPointer { vertices in

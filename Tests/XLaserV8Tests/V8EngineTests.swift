@@ -64,7 +64,7 @@ final class V8EngineTests: XCTestCase {
         let source = """
         function read(c, inputs, output) {
             output.beginShape(9); output.addVertex(3, 4, 0, 1, 1, 1, 1, 1, 0);
-            const values = new Float64Array(16); values.set(output.values.subarray(0, 8), 8);
+            const values = new Float32Array(16); values.set(output.values.subarray(0, 8), 8);
             output.values = values.subarray(8);
         }
         """
@@ -242,7 +242,7 @@ final class V8EngineTests: XCTestCase {
           o.beginShape(1);
           o.addVertex(0,0,0,1,1,1,1,1);
           o.addVertex({ position: [0,0,0,1], rgba: [1,1,1,1] });
-          const values = new Float64Array([0,0,0,1,1,1,1,1, 0,0,0,1,1,1,1,1]);
+          const values = new Float32Array([0,0,0,1,1,1,1,1, 0,0,0,1,1,1,1,1]);
           if (reads++ === 0) o.addVertices(values, new Uint16Array([Mode.blank, Mode.dwell]));
           else o.addVertices(values);
           o.reserveVertices(2);
@@ -278,7 +278,7 @@ final class V8EngineTests: XCTestCase {
           const old = o.values; o.reserve(20, 100);
           if (old === o.values || old[0] !== 0.25 || o.values[0] !== 0.25) throw new Error("Growth");
           old[0] = 9;
-          const v = new Float64Array(80 * 8), modes = new Uint16Array(80);
+          const v = new Float32Array(80 * 8), modes = new Uint16Array(80);
           for (let n=0;n<80;n++) { v[n*8]=n; v[n*8+3]=1; v[n*8+4]=1; v[n*8+5]=1; v[n*8+6]=1; v[n*8+7]=1; }
           o.addVertices(v, modes);
         }
@@ -294,7 +294,7 @@ final class V8EngineTests: XCTestCase {
     }
 
     func testBulkInvalidVertexIsRejectedAtReadBoundary() throws {
-        let source = "function read(c,i,o) { o.beginShape(1); o.addVertices(new Float64Array([NaN,0,0,1,1,1,1,1]), new Uint16Array([0])); }"
+        let source = "function read(c,i,o) { o.beginShape(1); o.addVertices(new Float32Array([NaN,0,0,1,1,1,1,1]), new Uint16Array([0])); }"
         let engine = try V8Engine(source: source)
         var output = Laser3DBuffer()
         XCTAssertThrowsError(try engine.read(context: context, inputs: [:], output: &output)) { error in
@@ -408,7 +408,7 @@ final class V8EngineTests: XCTestCase {
     func testErrorsDiscardOutputAndStop() throws {
         let cases: [(String, V8EngineError?)] = [
             ("function read() { throw new Error('broken'); }", nil),
-            ("function read(c, i, o) { o.allocate('float64', -1); }", nil),
+            ("function read(c, i, o) { o.allocate('float32', -1); }", nil),
             ("function read(c, i, o) { o.beginShape(1); o.shapes[1] = 99; }", .invalidOutput),
             ("function read(c, i, o) { o.vertexCount = -1; }", .invalidOutput),
             ("function read(c, i, o) { o.beginShape(1); o.addVertex(0,0,0,1,1,1,1,1,0); o.values[0] = NaN; }", .invalidOutput),

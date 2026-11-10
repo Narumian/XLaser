@@ -9,7 +9,7 @@ var input = Laser3DBuffer()
 try input.reserveCapacity(shapes: 10, vertices: 1000)
 for shape in 0..<10 {
     try input.beginShape(id: LaserShapeID(UInt32(shape)))
-    for vertex in 0..<100 { try input.appendVertex(LaserVertex(x: Double(vertex) / 100, y: 0)) }
+    for vertex in 0..<100 { try input.appendVertex(LaserVertex(x: Float(vertex) / 100, y: 0)) }
 }
 var output = Laser3DBuffer()
 try output.reserveCapacity(shapes: 10, vertices: 1000)

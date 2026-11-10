@@ -23,7 +23,7 @@ func makeBuffer(vertices: Int, shapes: Int) throws -> Laser3DBuffer {
     for shape in 0..<shapes {
         try result.beginShape(id: LaserShapeID(UInt32(shape)))
         for vertex in (shape * vertices / shapes)..<((shape + 1) * vertices / shapes) {
-            try result.appendVertex(LaserVertex(x: Double(vertex) / Double(vertices), y: 0.5))
+            try result.appendVertex(LaserVertex(x: Float(vertex) / Float(vertices), y: 0.5))
         }
     }
     return result
@@ -88,7 +88,7 @@ let scenarios = [
     Scenario(name: "generate_1k", source: "function read(c,i,o) { for (let s=0;s<10;s++) { o.beginShape(s); for (let v=0;v<100;v++) o.addVertex(v/100,0,0,1,1,1,1,1,0); } }", inputs: [:], vertices: 1000, iterations: 500, warmup: 100),
     Scenario(name: "generate_1k_direct", source: """
     function read(c,i,o) {
-        if (o.modes.length < 1000) { o.modes = o.allocate('uint16', 1000); o.values = o.allocate('float64', 8000); }
+        if (o.modes.length < 1000) { o.modes = o.allocate('uint16', 1000); o.values = o.allocate('float32', 8000); }
         for (let s=0;s<10;s++) {
             o.beginShape(s); o.shapes[s*3+1] = s*100; o.shapes[s*3+2] = 100;
             for (let v=0;v<100;v++) {
@@ -132,7 +132,7 @@ let scenarios = [
     }
     """, inputs: [:], vertices: 1000, iterations: 1000, warmup: 200),
     Scenario(name: "generate_1k_batch", source: """
-    const batchValues = new Float64Array(800), batchModes = new Uint16Array(100);
+    const batchValues = new Float32Array(800), batchModes = new Uint16Array(100);
     function read(c,i,o) {
         o.reserve(10, 1000);
         for (let s=0;s<10;s++) {

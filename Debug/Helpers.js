@@ -26,7 +26,7 @@ function read(context, inputs, output) {
   output.rectangle(5, vec2(0, 0), vec2(2, 2), Color.white);
   output.beginShape(6);
   output.addVertex(moved);
-  output.addVertices(new Float64Array([0,0,0,1,1,1,1,1, 1,0,0,1,1,1,1,1]), new Uint16Array([Mode.normal, Mode.blank]));
+  output.addVertices(new Float32Array([0,0,0,1,1,1,1,1, 1,0,0,1,1,1,1,1]), new Uint16Array([Mode.normal, Mode.blank]));
   output.beginShape(7);
   const start = output.reserveVertices(3), k = start * 8;
   output.values.set([0.5, 0.25, 0, 1, 1, 1, 1, 1], k);

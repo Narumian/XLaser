@@ -17,14 +17,14 @@ typedef struct {
     uint32_t dimension_a;
     uint32_t dimension_b;
     double sample_rate;
-    const double *values;
+    const float *values;
     const uint16_t *modes;
     const uint32_t *shapes;
     size_t vertex_count;
     size_t shape_count;
 } XLaserV8Input;
 typedef struct {
-    const double *values;
+    const float *values;
     const uint16_t *modes;
     const uint32_t *shapes;
     size_t vertex_count;

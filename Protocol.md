@@ -60,7 +60,7 @@ A read's output is valid until the next read for that asset begins. To retain it
 
 ## Vertex precision
 
-Position and color components use 64-bit floating-point values.
+Position and color components use 32-bit floating-point values.
 
 ## Execution errors
 

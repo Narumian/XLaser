@@ -10,7 +10,7 @@ final class Laser3DBufferTests: XCTestCase {
         try input.beginShape(id: 8)
         let mapped = input.mapVertices { vertex, index, count in
             var vertex = vertex
-            vertex.position.x += Double(index + count)
+            vertex.position.x += Float(index + count)
             return vertex
         }.mapShapeIDs { LaserShapeID($0.rawValue + 10) }
         var output = input
@@ -69,7 +69,7 @@ final class Laser3DBufferTests: XCTestCase {
         try buffer.appendVertex(LaserVertex(x: 1, y: 2))
         let expected = buffer
         let shapes: [UInt32] = [1, 0, 2]
-        let values: [Double] = [0, 0, 0, 1, 1, 1, 1, 1]
+        let values: [Float] = [0, 0, 0, 1, 1, 1, 1, 1]
         let modes: [UInt16] = [0]
         XCTAssertThrowsError(try shapes.withUnsafeBufferPointer { shapes in
             try values.withUnsafeBufferPointer { values in
