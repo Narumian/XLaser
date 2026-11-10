@@ -8,8 +8,8 @@ let package = Package(
         .library(name: "XLaserApple", targets: ["XLaserApple"]),
     ],
     targets: [
-        .target(name: "XLaser"),
-        .target(name: "XLaserApple", dependencies: ["XLaser"], path: "Sources/Apple", resources: [.copy("Resources/LaserScript.js")]),
+        .target(name: "XLaser", resources: [.copy("Resources/LaserScript.js")]),
+        .target(name: "XLaserApple", dependencies: ["XLaser"], path: "Sources/Apple"),
         .executableTarget(name: "LaserScriptBench", dependencies: ["XLaser", "XLaserApple"], path: "Benchmarks"),
         .testTarget(name: "XLaserTests", dependencies: ["XLaser"]),
         .testTarget(name: "XLaserAppleTests", dependencies: ["XLaserApple", "XLaser"]),

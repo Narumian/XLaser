@@ -22,8 +22,7 @@ public final class JavaScriptCoreEngine: LaserScriptEngine {
     public init(source: String) throws {
         guard let context = JSContext() else { throw JavaScriptCoreEngineError.contextUnavailable }
         self.context = context
-        guard let runtimeURL = Bundle.module.url(forResource: "LaserScript", withExtension: "js"),
-              let runtime = try? String(contentsOf: runtimeURL, encoding: .utf8) else {
+        guard let runtime = try? LaserScriptJavaScriptRuntime.source() else {
             throw JavaScriptCoreEngineError.runtimeUnavailable
         }
         context.evaluateScript(runtime)
