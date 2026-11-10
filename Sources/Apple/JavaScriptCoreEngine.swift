@@ -5,6 +5,7 @@ import XLaser
 
 public enum JavaScriptCoreEngineError: Error, Equatable {
     case contextUnavailable
+    case runtimeUnavailable
     case javaScript(String)
     case invalidOutput
     case stopped
@@ -18,16 +19,27 @@ public final class JavaScriptCoreEngine: LaserScriptEngine {
     public init(source: String) throws {
         guard let context = JSContext() else { throw JavaScriptCoreEngineError.contextUnavailable }
         self.context = context
+        guard let runtimeURL = Bundle.module.url(forResource: "LaserScript", withExtension: "js"),
+              let runtime = try? String(contentsOf: runtimeURL, encoding: .utf8) else {
+            throw JavaScriptCoreEngineError.runtimeUnavailable
+        }
+        context.evaluateScript(runtime)
+        if let exception = context.exception {
+            throw JavaScriptCoreEngineError.javaScript(exception.toString() ?? "JavaScript exception")
+        }
         context.evaluateScript(source)
         if let exception = context.exception {
             throw JavaScriptCoreEngineError.javaScript(exception.toString() ?? "JavaScript exception")
         }
         let invoke = context.evaluateScript("""
-        (function(context, inputs) {
-            const output = { shapes: [], addShape(id, vertices) { this.shapes.push({ id, vertices }); } };
-            read(context, inputs, output);
-            return JSON.stringify(output.shapes);
-        })
+        (function() {
+            const output = new Laser3DStream();
+            return function(context, inputs) {
+                output.reset();
+                read(context, inputs, output);
+                return output;
+            };
+        })()
         """)
         if let exception = context.exception {
             throw JavaScriptCoreEngineError.javaScript(exception.toString() ?? "JavaScript exception")
@@ -48,41 +60,69 @@ public final class JavaScriptCoreEngine: LaserScriptEngine {
                 }] as [String: Any]
             }
         }
-        let value = invoke.call(withArguments: [["time": readContext.time, "sampleRate": readContext.sampleRate, "frameLength": readContext.frameLength], encodedInputs])
+        let output = invoke.call(withArguments: [["time": readContext.time, "sampleRate": readContext.sampleRate, "frameLength": readContext.frameLength], encodedInputs])
         if let exception = context.exception {
             stopped = true
             throw JavaScriptCoreEngineError.javaScript(exception.toString() ?? "JavaScript exception")
         }
-        guard let json = value?.toString(), let data = json.data(using: .utf8),
-              let shapes = try? JSONDecoder().decode([Shape].self, from: data) else {
+        do {
+            guard let output else { throw JavaScriptCoreEngineError.invalidOutput }
+            return try decode(output)
+        } catch {
             stopped = true
             throw JavaScriptCoreEngineError.invalidOutput
         }
-        do { return try shapes.map { try $0.converted() } }
-        catch { stopped = true; throw JavaScriptCoreEngineError.invalidOutput }
     }
-}
 
-private struct Shape: Decodable {
-    let id: UInt32
-    let vertices: [Vertex]
-
-    func converted() throws -> Laser3DShape {
-        Laser3DShape(id: LaserShapeID(id), vertices: try vertices.map { try $0.converted() })
+    private func decode(_ output: JSValue) throws -> [Laser3DShape] {
+        guard let shapeCountValue = output.forProperty("shapeCount"), shapeCountValue.isNumber,
+              let vertexCountValue = output.forProperty("vertexCount"), vertexCountValue.isNumber,
+              let shapeCount32 = UInt32(exactly: shapeCountValue.toDouble()),
+              let vertexCount32 = UInt32(exactly: vertexCountValue.toDouble()),
+              let shapeCount = Int(exactly: shapeCount32), let vertexCount = Int(exactly: vertexCount32),
+              shapeCount <= Int.max / 3, vertexCount <= Int.max / 8,
+              let shapeValue = output.forProperty("shapes"),
+              let vertexValue = output.forProperty("values"),
+              let modeValue = output.forProperty("modes"), context.exception == nil else {
+            throw JavaScriptCoreEngineError.invalidOutput
+        }
+        let shapes: [UInt32] = try copyArray(shapeValue, count: shapeCount * 3, type: kJSTypedArrayTypeUint32Array)
+        let vertices: [Double] = try copyArray(vertexValue, count: vertexCount * 8, type: kJSTypedArrayTypeFloat64Array)
+        let modes: [UInt16] = try copyArray(modeValue, count: vertexCount, type: kJSTypedArrayTypeUint16Array)
+        var result: [Laser3DShape] = []
+        result.reserveCapacity(shapeCount)
+        for i in 0..<shapeCount {
+            guard let start = Int(exactly: shapes[i * 3 + 1]), let length = Int(exactly: shapes[i * 3 + 2]),
+                  start <= vertexCount, length <= vertexCount - start else { throw JavaScriptCoreEngineError.invalidOutput }
+            var shapeVertices: [LaserVertex] = []
+            shapeVertices.reserveCapacity(length)
+            for j in start..<(start + length) {
+                let k = j * 8
+                guard let mode = LaserPointMode(rawValue: modes[j]),
+                      vertices[k..<(k + 8)].allSatisfy(\.isFinite) else { throw JavaScriptCoreEngineError.invalidOutput }
+                shapeVertices.append(LaserVertex(position: SIMD4(vertices[k], vertices[k + 1], vertices[k + 2], vertices[k + 3]),
+                                                 rgba: SIMD4(vertices[k + 4], vertices[k + 5], vertices[k + 6], vertices[k + 7]), mode: mode))
+            }
+            result.append(Laser3DShape(id: LaserShapeID(shapes[i * 3]), vertices: shapeVertices))
+        }
+        return result
     }
-}
 
-private struct Vertex: Decodable {
-    let position: [Double]
-    let rgba: [Double]
-    let mode: UInt16
-
-    func converted() throws -> LaserVertex {
-        guard position.count == 4, rgba.count == 4,
-              position.allSatisfy(\.isFinite), rgba.allSatisfy(\.isFinite),
-              let mode = LaserPointMode(rawValue: mode) else { throw JavaScriptCoreEngineError.invalidOutput }
-        return LaserVertex(position: SIMD4(position[0], position[1], position[2], position[3]),
-                           rgba: SIMD4(rgba[0], rgba[1], rgba[2], rgba[3]), mode: mode)
+    private func copyArray<T>(_ value: JSValue, count: Int, type: JSTypedArrayType) throws -> [T] {
+        let jsContext = context.jsGlobalContextRef
+        var exception: JSValueRef?
+        guard JSValueGetTypedArrayType(jsContext, value.jsValueRef, &exception) == type, exception == nil,
+              let object = JSValueToObject(jsContext, value.jsValueRef, &exception), exception == nil,
+              JSObjectGetTypedArrayLength(jsContext, object, &exception) >= count, exception == nil else {
+            throw JavaScriptCoreEngineError.invalidOutput
+        }
+        let byteOffset = JSObjectGetTypedArrayByteOffset(jsContext, object, &exception)
+        guard exception == nil else { throw JavaScriptCoreEngineError.invalidOutput }
+        guard count > 0 else { return [] }
+        guard let bytes = JSObjectGetTypedArrayBytesPtr(jsContext, object, &exception), exception == nil else {
+            throw JavaScriptCoreEngineError.invalidOutput
+        }
+        return Array(UnsafeBufferPointer(start: bytes.advanced(by: byteOffset).assumingMemoryBound(to: T.self), count: count))
     }
 }
 #endif

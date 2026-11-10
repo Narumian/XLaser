@@ -9,7 +9,7 @@ let package = Package(
     ],
     targets: [
         .target(name: "XLaser"),
-        .target(name: "XLaserApple", dependencies: ["XLaser"], path: "Sources/Apple"),
+        .target(name: "XLaserApple", dependencies: ["XLaser"], path: "Sources/Apple", resources: [.copy("Resources/LaserScript.js")]),
         .executableTarget(name: "LaserScriptBench", dependencies: ["XLaser", "XLaserApple"], path: "Benchmarks"),
         .testTarget(name: "XLaserTests", dependencies: ["XLaser"]),
         .testTarget(name: "XLaserAppleTests", dependencies: ["XLaserApple", "XLaser"]),

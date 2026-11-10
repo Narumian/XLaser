@@ -17,6 +17,18 @@ function read(c, inputs, output) {
     }
 }
 """
+let directGenerator = """
+function read(c, inputs, output) {
+    const shapeCount = Math.min(10, c.frameLength);
+    for (let shape = 0; shape < shapeCount; shape++) {
+        output.beginShape(shape + 1);
+        const start = Math.floor(shape * c.frameLength / shapeCount);
+        const end = Math.floor((shape + 1) * c.frameLength / shapeCount);
+        for (let i = start; i < end; i++)
+            output.addVertex(i / c.frameLength, 0, 0, 1, 1, 1, 1, 1, 0);
+    }
+}
+"""
 let passthrough = """
 function read(c, inputs, output) {
     for (const shape of inputs[0]) output.addShape(shape.id, shape.vertices);
@@ -126,9 +138,10 @@ guard try sharedCheck.read(count: 2, input: checkInput) == checkInput,
 
 for count in [2, 100, 1000] {
     let iterations = count == 1000 ? 100 : 500
-    try benchmark(name: "generate", source: generator, count: count, inputs: [], iterations: iterations)
+    try benchmark(name: "engine-object-generate", source: generator, count: count, inputs: [], iterations: iterations)
     let input = makeShapes(count: count, shapeCount: min(10, count))
-    try benchmark(name: "passthrough", source: passthrough, count: count, inputs: [input], iterations: iterations)
+    try benchmark(name: "engine-object-passthrough", source: passthrough, count: count, inputs: [input], iterations: iterations)
+    try benchmark(name: "engine-direct-generate", source: directGenerator, count: count, inputs: [], iterations: iterations)
     try benchmarkTypedArray(count: count, input: nil, iterations: iterations)
     try benchmarkTypedArray(count: count, input: input, iterations: iterations)
     try benchmarkShared(count: count, input: nil, iterations: iterations)
