@@ -55,6 +55,23 @@ func benchmarkTypedArray(count: Int, input: [Laser3DShape]?, iterations: Int) th
     print("typed-\(name) vertices=\(count) reads=\(iterations) ms/read=\(String(format: "%.3f", seconds * 1000 / Double(iterations)))")
 }
 
+func benchmarkShared(count: Int, input: [Laser3DShape]?, iterations: Int) throws {
+    let engine = try SharedBufferBenchmark(capacity: count)
+    let shapeCount = min(10, count)
+    let expected = input ?? makeShapes(count: count, shapeCount: shapeCount)
+    guard try engine.read(count: count, input: input, generatedShapeCount: shapeCount) == expected else { throw BenchError.invalidOutput }
+    for _ in 0..<10 { _ = try engine.read(count: count, input: input, generatedShapeCount: shapeCount) }
+    let start = DispatchTime.now().uptimeNanoseconds
+    var total = 0
+    for _ in 0..<iterations {
+        total += try engine.read(count: count, input: input, generatedShapeCount: shapeCount).reduce(0) { $0 + $1.vertices.count }
+    }
+    let seconds = Double(DispatchTime.now().uptimeNanoseconds - start) / 1e9
+    guard total == count * iterations else { throw BenchError.invalidOutput }
+    let name = input == nil ? "generate" : "passthrough"
+    print("shared-\(name) vertices=\(count) reads=\(iterations) ms/read=\(String(format: "%.3f", seconds * 1000 / Double(iterations)))")
+}
+
 enum BenchError: Error { case invalidOutput }
 
 func makeShapes(count: Int, shapeCount: Int) -> [Laser3DShape] {
@@ -83,6 +100,11 @@ do {
     // Capacity overflow is reported rather than writing beyond the buffer.
 }
 
+let sharedCheck = try SharedBufferBenchmark(capacity: 2)
+guard try sharedCheck.read(count: 2, input: checkInput) == checkInput,
+      try sharedCheck.read(count: 0, input: []) == [],
+      try sharedCheck.read(count: 2, input: checkInput) == checkInput else { throw BenchError.invalidOutput }
+
 for count in [2, 100, 1000] {
     let iterations = count == 1000 ? 100 : 500
     try benchmark(name: "generate", source: generator, count: count, inputs: [], iterations: iterations)
@@ -90,6 +112,8 @@ for count in [2, 100, 1000] {
     try benchmark(name: "passthrough", source: passthrough, count: count, inputs: [input], iterations: iterations)
     try benchmarkTypedArray(count: count, input: nil, iterations: iterations)
     try benchmarkTypedArray(count: count, input: input, iterations: iterations)
+    try benchmarkShared(count: count, input: nil, iterations: iterations)
+    try benchmarkShared(count: count, input: input, iterations: iterations)
 }
 #else
 print("LaserScriptBench requires JavaScriptCore.")
