@@ -18,6 +18,10 @@ For example (the header key and version are illustrative):
 ```javascript
 /*{
   "LASERSCRIPT": "1.0",
+  "NAME": "Adjustable Point",
+  "DESCRIPTION": "A point with an adjustable horizontal position.",
+  "CATEGORIES": ["Graphic"],
+  "TAGS": ["point"],
   "INPUTS": [
     { "NAME": "speed", "TYPE": "float", "DEFAULT": 1.0, "MIN": 0.0, "MAX": 10.0 }
   ]

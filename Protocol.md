@@ -4,6 +4,17 @@ LaserScriptable defines common semantics for laser assets implemented in multipl
 
 JavaScript asset formats are defined in [JavaScriptProtocol.md](JavaScriptProtocol.md).
 
+## Asset metadata
+
+An asset may declare the following metadata:
+
+- `NAME`: a string identifying the asset by name.
+- `DESCRIPTION`: a string describing the asset.
+- `CATEGORIES`: an array of category strings.
+- `TAGS`: an array of tag strings.
+
+All fields are optional. Category and tag values are not restricted by this protocol. The host must be able to obtain the declared metadata through the asset descriptor.
+
 ## Input declarations
 
 Asset metadata may declare laser inputs and parameters in an `INPUTS` array. Each entry must contain string-valued `NAME` and `TYPE` fields. Numeric inputs may include `DEFAULT`, `MIN`, and `MAX` attributes.
