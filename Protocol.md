@@ -26,6 +26,7 @@ An asset's laser inputs use the same 3D shape semantics as its output, aligned w
 ## Buffer management
 
 The host provides and manages the input and output buffers. The asset must be able to request output buffer growth through a host-provided mechanism.
+A read's output is valid until the next read for that asset begins. To retain it longer, the host must copy it or use another buffer.
 
 ## Vertex precision
 
