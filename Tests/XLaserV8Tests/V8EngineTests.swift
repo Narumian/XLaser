@@ -145,6 +145,39 @@ final class V8EngineTests: XCTestCase {
         XCTAssertEqual(spectrum.bins[0], 1)
     }
 
+    func testDescriptorDefaultsAndExplicitValues() throws {
+        let source = #"""
+        /*{"INPUTS":[{"NAME":"speed","TYPE":"float","DEFAULT":1.5},
+          {"NAME":"count","TYPE":"long","DEFAULT":3},
+          {"NAME":"center","TYPE":"point2D","DEFAULT":[0.25,0.5]},
+          {"NAME":"optional","TYPE":"bool"}]}*/
+        function read(c, i, o) {
+          if (i.optional !== undefined) throw new Error("Unexpected optional input");
+          o.beginShape(1); o.addVertex(i.speed, i.count, i.center[0], 1, i.center[1], 1, 1, 1, 0);
+        }
+        """#
+        let engine: any LaserScriptable = try V8Engine(source: source)
+        var output = Laser3DBuffer()
+        try engine.read(context: context, inputs: [:], output: &output)
+        output.withUnsafeBuffers { _, values, _ in XCTAssertEqual(Array(values), [1.5, 3, 0.25, 1, 0.5, 1, 1, 1]) }
+        try engine.read(context: context, inputs: ["speed": .float(2), "count": .int(5), "center": .vec2(SIMD2(0.75, 0.25))], output: &output)
+        output.withUnsafeBuffers { _, values, _ in XCTAssertEqual(Array(values), [2, 5, 0.75, 1, 0.25, 1, 1, 1]) }
+        XCTAssertThrowsError(try engine.read(context: context, inputs: ["count": .float(3)], output: &output)) { error in
+            XCTAssertEqual(error as? LaserInputResolutionError, .typeMismatch(name: "count", expected: "int"))
+        }
+        XCTAssertTrue(output.isEmpty)
+        XCTAssertThrowsError(try engine.read(context: context, inputs: [:], output: &output)) { error in
+            XCTAssertEqual(error as? V8EngineError, .stopped)
+        }
+    }
+
+    func testInvalidDescriptorDefaultIsRejectedAtLoad() {
+        let source = #"/*{"INPUTS":[{"NAME":"v","TYPE":"vec3","DEFAULT":[1,2]}]}*/ function read() {}"#
+        XCTAssertThrowsError(try V8Engine(source: source)) { error in
+            XCTAssertEqual(error as? LaserInputResolutionError, .invalidDefault(name: "v", type: "vec3"))
+        }
+    }
+
     func testNamedLaserAndFloatInputs() throws {
         let asset: any LaserScriptable = try V8Engine(source: "function read(c, inputs, o) { o.addStream(inputs.beam); o.beginShape(2); o.addVertex(inputs.speed, 0, 0, 1, 1, 1, 1, 1, 0); }")
         let input = try buffer([(1, [LaserVertex(x: 0.5, y: 0)])])

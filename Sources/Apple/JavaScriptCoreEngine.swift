@@ -14,6 +14,7 @@ public enum JavaScriptCoreEngineError: Error, Equatable {
 
 public final class JavaScriptCoreEngine: LaserScriptable {
     public let descriptor: LaserDescriptor
+    private let inputResolver: LaserInputResolver
     private let context: JSContext
     private let invoke: JSValue
     private let makeInput: JSValue
@@ -24,6 +25,7 @@ public final class JavaScriptCoreEngine: LaserScriptable {
 
     public init(source: String) throws {
         descriptor = try LaserJavaScriptDescriptor.parse(source)
+        inputResolver = try LaserInputResolver(descriptor: descriptor)
         guard let context = JSContext() else { throw JavaScriptCoreEngineError.contextUnavailable }
         self.context = context
         guard let runtime = try? LaserScriptJavaScriptRuntime.source() else {
@@ -71,7 +73,7 @@ public final class JavaScriptCoreEngine: LaserScriptable {
         do {
             guard let object = context.evaluateScript("Object.create(null)") else { throw JavaScriptCoreEngineError.invalidInput }
             var index = 0
-            for (name, value) in inputs.sorted(by: { $0.key < $1.key }) {
+            for (name, value) in try inputResolver.resolve(inputs).sorted(by: { $0.key < $1.key }) {
                 guard !name.utf8.contains(0) else { throw JavaScriptCoreEngineError.invalidInput }
                 switch value {
                 case .laser(let buffer):

@@ -12,6 +12,7 @@ public enum V8EngineError: Error, Equatable {
 
 public final class V8Engine: LaserScriptable {
     public let descriptor: LaserDescriptor
+    private let inputResolver: LaserInputResolver
     public static var isAvailable: Bool { xlv8_available() != 0 }
 
     private let runtime: OpaquePointer
@@ -20,6 +21,7 @@ public final class V8Engine: LaserScriptable {
     public init(source: String) throws {
         guard Self.isAvailable else { throw V8EngineError.unavailable }
         descriptor = try LaserJavaScriptDescriptor.parse(source)
+        inputResolver = try LaserInputResolver(descriptor: descriptor)
         let host = try LaserScriptJavaScriptRuntime.source()
         guard !source.utf8.contains(0), !host.utf8.contains(0) else { throw V8EngineError.invalidInput }
         guard let runtime = host.withCString({ runtime in
@@ -34,7 +36,7 @@ public final class V8Engine: LaserScriptable {
         output.removeAll()
         guard !stopped else { throw V8EngineError.stopped }
         do {
-            let packed = try PackedInputs(inputs)
+            let packed = try PackedInputs(inputResolver.resolve(inputs))
             var nativeOutput = XLaserV8Output()
             let status = packed.withInputs { descriptors in
                 xlv8_read(runtime, context.time, context.sampleRate, Double(context.frameLength),

@@ -10,6 +10,8 @@ Asset metadata may declare laser inputs and parameters in an `INPUTS` array. Eac
 Supported input types include `float`, `int`, `long`, `bool`, `string`, `vec2`, `vec3`, `vec4`, `point2D`, `color`, `enum`, `event`, `array`, `matrix`, `laser`, `image`, `audio`, and `audioFFT`.
 `long` is an alias for `int`, and `point2D` is an alias for `vec2`.
 The host must be able to obtain an asset descriptor containing its input declarations.
+For a declared input, the supplied value must match its type. If no value is supplied, its declared `DEFAULT` is used; otherwise the input is absent.
+Defaults are not supported for `laser`, `image`, `audio`, or `audioFFT` inputs.
 
 ## Read context
 
