@@ -63,3 +63,9 @@ Position and color components use 64-bit floating-point values.
 ## Execution errors
 
 If a read fails, its output must not be used and the asset must stop. The host may reinitialize the asset before running it again.
+
+Recoverable asset loading and execution errors must be reported to the host. Invalid input or output originating from an asset must not be handled with native assertions or fatal errors.
+
+## Open concerns
+
+Execution time limits, including interruption of infinite loops, and memory limits require investigation for each engine and platform. Recovery from process-level failures is not guaranteed.
