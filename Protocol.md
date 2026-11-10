@@ -69,3 +69,7 @@ Recoverable asset loading and execution errors must be reported to the host. Inv
 ## Open concerns
 
 Execution time limits, including interruption of infinite loops, and memory limits require investigation for each engine and platform. Recovery from process-level failures is not guaranteed.
+
+## Playback time
+
+For each read, the host must provide `context.time` in seconds as the playback time assigned to that read’s output.
