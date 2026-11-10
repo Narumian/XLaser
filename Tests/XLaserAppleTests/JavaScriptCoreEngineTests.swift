@@ -184,6 +184,104 @@ final class JavaScriptCoreEngineTests: XCTestCase {
         }
     }
 
+    func testConvenienceFunctionsAndSafeReservations() throws {
+        let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+        let source = try String(contentsOf: root.appendingPathComponent("Debug/Helpers.js"), encoding: .utf8)
+        let engine: any LaserScriptable = try JavaScriptCoreEngine(source: source)
+        var output = Laser3DBuffer()
+        for _ in 0..<2 {
+            try engine.read(context: context, inputs: [:], output: &output)
+            XCTAssertEqual(output.shapeCount, 7)
+            XCTAssertEqual(output.vertexCount, 23)
+            output.withUnsafeBuffers { shapes, values, modes in
+                XCTAssertEqual(shapes.map(\.id.rawValue), [1, 2, 3, 4, 5, 6, 7])
+                XCTAssertEqual(shapes.map(\.count), [2, 2, 4, 5, 5, 3, 2])
+                for shape in shapes[2...4] {
+                    let first = Int(shape.start) * 8
+                    let last = (Int(shape.start) + Int(shape.count) - 1) * 8
+                    XCTAssertEqual(Array(values[first..<(first + 8)]), Array(values[last..<(last + 8)]))
+                }
+                let polyline = Int(shapes[1].start) * 8
+                XCTAssertEqual(Array(values[(polyline + 4)..<(polyline + 8)]), [0, 0, 0, 1])
+                let moved = Int(shapes[5].start) * 8
+                XCTAssertEqual(Array(values[moved..<(moved + 8)]), [12, 23, 34, 1, 1, 0, 0, 1])
+                XCTAssertEqual(modes[Int(shapes[5].start)], LaserPointMode.dwell.rawValue)
+                let unwritten = Int(shapes[6].start) + 1
+                XCTAssertEqual(Array(values[(unwritten * 8)..<(unwritten * 8 + 8)]), Array(repeating: 0, count: 8))
+                XCTAssertEqual(modes[unwritten], LaserPointMode.blank.rawValue)
+            }
+        }
+    }
+
+    func testReservedVerticesDoNotReusePreviousFrameData() throws {
+        let source = """
+        let reads = 0;
+        function read(c, i, o) {
+          o.beginShape(1);
+          const start = o.reserveVertices(2);
+          if (reads++ === 0) {
+            o.values.set([0.7,0,0,1,1,1,1,1], (start+1)*8);
+            o.modes[start+1] = Mode.normal;
+          }
+          o.commitVertices(2);
+        }
+        """
+        let engine = try JavaScriptCoreEngine(source: source)
+        var output = Laser3DBuffer()
+        try engine.read(context: context, inputs: [:], output: &output)
+        output.withUnsafeBuffers { _, values, modes in
+            XCTAssertEqual(values[8], 0.7)
+            XCTAssertEqual(modes[1], LaserPointMode.normal.rawValue)
+        }
+        try engine.read(context: context, inputs: [:], output: &output)
+        output.withUnsafeBuffers { _, values, modes in
+            XCTAssertEqual(Array(values[8..<16]), Array(repeating: 0, count: 8))
+            XCTAssertEqual(modes[1], LaserPointMode.blank.rawValue)
+        }
+    }
+
+    func testIncompleteReservationFailsAndStops() throws {
+        let engine = try JavaScriptCoreEngine(source: "function read(c, i, o) { o.beginShape(1); o.reserveVertices(1); }")
+        var output = Laser3DBuffer()
+        XCTAssertThrowsError(try engine.read(context: context, inputs: [:], output: &output))
+        XCTAssertTrue(output.isEmpty)
+        XCTAssertThrowsError(try engine.read(context: context, inputs: [:], output: &output)) { error in
+            XCTAssertEqual(error as? JavaScriptCoreEngineError, .stopped)
+        }
+    }
+
+    func testBulkValidationAndGrowth() throws {
+        let source = #"""
+        function read(c, i, o) {
+          o.beginShape(5); o.addVertex(Vertex(0.25, 0.5));
+          const old = o.values; o.reserve(20, 100);
+          if (old === o.values || old[0] !== 0.25 || o.values[0] !== 0.25) throw new Error("Growth");
+          old[0] = 9;
+          const v = new Float64Array(80 * 8), modes = new Uint16Array(80);
+          for (let n=0;n<80;n++) { v[n*8]=n; v[n*8+3]=1; v[n*8+4]=1; v[n*8+5]=1; v[n*8+6]=1; v[n*8+7]=1; }
+          o.addVertices(v, modes);
+        }
+        """#
+        let engine = try JavaScriptCoreEngine(source: source)
+        var output = Laser3DBuffer()
+        try engine.read(context: context, inputs: [:], output: &output)
+        XCTAssertEqual(output.vertexCount, 81)
+        output.withUnsafeBuffers { _, values, _ in
+            XCTAssertEqual(values[0], 0.25)
+            XCTAssertEqual(values[80 * 8], 79)
+        }
+    }
+
+    func testBulkInvalidVertexIsRejectedAtReadBoundary() throws {
+        let source = "function read(c,i,o) { o.beginShape(1); o.addVertices(new Float64Array([NaN,0,0,1,1,1,1,1]), new Uint16Array([0])); }"
+        let engine = try JavaScriptCoreEngine(source: source)
+        var output = Laser3DBuffer()
+        XCTAssertThrowsError(try engine.read(context: context, inputs: [:], output: &output)) { error in
+            XCTAssertEqual(error as? JavaScriptCoreEngineError, .invalidOutput)
+        }
+        XCTAssertTrue(output.isEmpty)
+    }
+
     func testNamedLaserAndFloatInputs() throws {
         let asset: any LaserScriptable = try JavaScriptCoreEngine(source: "function read(c, inputs, o) { o.addStream(inputs.beam); o.beginShape(2); o.addVertex(inputs.speed, 0, 0, 1, 1, 1, 1, 1, 0); }")
         let input = try buffer([(1, [LaserVertex(x: 0.5, y: 0)])])

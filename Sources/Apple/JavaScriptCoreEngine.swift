@@ -54,6 +54,7 @@ public final class JavaScriptCoreEngine: LaserScriptable {
             return function(context, inputs) {
                 output.reset();
                 read(context, inputs, output);
+                output.finishRead();
                 return output;
             };
         })()

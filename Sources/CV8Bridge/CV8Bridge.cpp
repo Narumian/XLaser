@@ -118,6 +118,7 @@ XLaserV8Runtime *xlv8_create(const char *runtime_source, const char *source) {
             return function(context, inputs) {
                 output.reset();
                 read(context, inputs, output);
+                output.finishRead();
                 return output;
             };
         }))JS";

@@ -100,6 +100,36 @@ let scenarios = [
         o.vertexCount=1000;
     }
     """, inputs: [:], vertices: 1000, iterations: 500, warmup: 100),
+    Scenario(name: "generate_1k_reserved", source: """
+    function read(c,i,o) {
+        o.reserve(10, 1000);
+        for (let s=0;s<10;s++) {
+            o.beginShape(s);
+            const start = o.reserveVertices(100), values = o.values, modes = o.modes;
+            for (let v=0;v<100;v++) {
+                const index=start+v, k=index*8;
+                values[k]=v/100; values[k+1]=0; values[k+2]=0; values[k+3]=1;
+                values[k+4]=1; values[k+5]=1; values[k+6]=1; values[k+7]=1; modes[index]=0;
+            }
+            o.commitVertices(100);
+        }
+    }
+    """, inputs: [:], vertices: 1000, iterations: 500, warmup: 100),
+    Scenario(name: "generate_1k_batch", source: """
+    const batchValues = new Float64Array(800), batchModes = new Uint16Array(100);
+    function read(c,i,o) {
+        o.reserve(10, 1000);
+        for (let s=0;s<10;s++) {
+            o.beginShape(s);
+            for (let v=0;v<100;v++) {
+                const k=v*8;
+                batchValues[k]=v/100; batchValues[k+1]=0; batchValues[k+2]=0; batchValues[k+3]=1;
+                batchValues[k+4]=1; batchValues[k+5]=1; batchValues[k+6]=1; batchValues[k+7]=1; batchModes[v]=0;
+            }
+            o.addVertices(batchValues, batchModes);
+        }
+    }
+    """, inputs: [:], vertices: 1000, iterations: 500, warmup: 100),
     Scenario(name: "image_rgba_512", source: imageSource, inputs: ["image": .image(image512)], vertices: 1, iterations: 200, warmup: 20),
     Scenario(name: "image_rgba_1080p", source: imageSource, inputs: ["image": .image(image1080)], vertices: 1, iterations: 100, warmup: 10),
     Scenario(name: "audio_1024_stereo_fft_1025", source: "function read(c,i,o) { if (i.audio.samples[0] !== 0.25 || i.fft.bins[0] !== 0.5) throw new Error('bad'); \(point) }", inputs: ["audio": .audio(audio), "fft": .audioFFT(spectrum)], vertices: 1, iterations: 500, warmup: 50),

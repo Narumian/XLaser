@@ -29,6 +29,15 @@ function read(context, inputs, output) {
 }
 ```
 
+## JavaScript helpers
+
+- `Vertex(x, y, z, color, mode)` creates a vertex with defaults `z = 0`, white color, and `Mode.normal`. Its `withPosition`, `withColor`, `withMode`, `blanked`, and `transformed` methods return new vertices. `transformed` accepts a row-major 4×4 array or matrix input.
+- `Color(r, g, b, a)`, `Color.rgb`, `Color.hsv`, `Color.black`, `Color.white`, and `Mode.normal`, `Mode.dwell`, `Mode.blank` are available.
+- `output.reserve(shapes, vertices)` reserves capacity. `output.addVertex` accepts a vertex or nine components; `output.addVertices` appends an interleaved `Float64Array` and a `Uint16Array` of modes to the current shape.
+- After `output.beginShape(id)`, `output.reserveVertices(count)` returns the starting vertex index. Write into `output.values` and `output.modes`, then call `output.commitVertices(count)`. Unwritten reserved vertices are blank; an uncommitted reservation fails the read. A capacity increase invalidates earlier views.
+- `output.line`, `output.polyline`, `output.polygon`, `output.circle`, and `output.rectangle` append shapes. Polygons, circles, and rectangles are closed.
+- `clamp`, `lerp`, `map`, `radians`, `degrees`, `vec2`, `vec3`, `vec4`, `phase`, and `wave.sine`, `wave.triangle`, `wave.saw`, `wave.square` are available. `phase(time, period)` returns a value in `[0, 1)` for a positive period; wave functions take phase in turns and return values in `[-1, 1]`.
+
 ## JavaScript directory package
 
 - A directory package must have the `.ls` extension.
