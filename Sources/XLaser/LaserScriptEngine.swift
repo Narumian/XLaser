@@ -11,5 +11,5 @@ public struct LaserScriptReadContext: Sendable, Equatable {
 }
 
 public protocol LaserScriptEngine: AnyObject {
-    func read(context: LaserScriptReadContext, inputs: [[Laser3DShape]]) throws -> [Laser3DShape]
+    func read(context: LaserScriptReadContext, inputs: [Laser3DBuffer], output: inout Laser3DBuffer) throws
 }

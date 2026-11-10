@@ -53,7 +53,8 @@ public final class JavaScriptCoreEngine: LaserScriptEngine {
         self.invoke = invoke
     }
 
-    public func read(context readContext: LaserScriptReadContext, inputs: [[Laser3DShape]]) throws -> [Laser3DShape] {
+    public func read(context readContext: LaserScriptReadContext, inputs: [Laser3DBuffer], output: inout Laser3DBuffer) throws {
+        output.removeAll()
         guard !stopped else { throw JavaScriptCoreEngineError.stopped }
         context.exception = nil
         let encodedInputs: [JSValue]
@@ -63,59 +64,45 @@ public final class JavaScriptCoreEngine: LaserScriptEngine {
             stopped = true
             throw error
         }
-        let output = invoke.call(withArguments: [["time": readContext.time, "sampleRate": readContext.sampleRate, "frameLength": readContext.frameLength], encodedInputs])
+        let jsOutput = invoke.call(withArguments: [["time": readContext.time, "sampleRate": readContext.sampleRate, "frameLength": readContext.frameLength], encodedInputs])
         if let exception = context.exception {
             stopped = true
             throw JavaScriptCoreEngineError.javaScript(exception.toString() ?? "JavaScript exception")
         }
         do {
-            guard let output else { throw JavaScriptCoreEngineError.invalidOutput }
-            return try decode(output)
+            guard let jsOutput else { throw JavaScriptCoreEngineError.invalidOutput }
+            try decode(jsOutput, into: &output)
         } catch {
+            output.removeAll()
             stopped = true
             throw JavaScriptCoreEngineError.invalidOutput
         }
     }
 
-    private func encodeInput(_ shapes: [Laser3DShape], index: Int) throws -> JSValue {
-        var count = 0
-        guard UInt32(exactly: shapes.count) != nil, shapes.count <= Int.max / 3 else { throw JavaScriptCoreEngineError.invalidInput }
-        for shape in shapes {
-            let (next, overflow) = count.addingReportingOverflow(shape.vertices.count)
-            guard !overflow, UInt32(exactly: next) != nil, next <= Int.max / 8 else { throw JavaScriptCoreEngineError.invalidInput }
-            count = next
-        }
+    private func encodeInput(_ buffer: Laser3DBuffer, index: Int) throws -> JSValue {
+        guard UInt32(exactly: buffer.vertexCount) != nil, UInt32(exactly: buffer.shapeCount) != nil,
+              buffer.shapeCount <= Int.max / 3 else { throw JavaScriptCoreEngineError.invalidInput }
         while inputBuffers.count <= index {
             guard let input = makeInput.call(withArguments: []), context.exception == nil else { throw JavaScriptCoreEngineError.invalidInput }
             inputBuffers.append(input)
         }
         let input = inputBuffers[index]
-        input.invokeMethod("prepare", withArguments: [count, shapes.count])
+        input.invokeMethod("prepare", withArguments: [buffer.vertexCount, buffer.shapeCount])
         guard context.exception == nil,
               let valueBuffer = input.forProperty("values"),
               let modeBuffer = input.forProperty("modes"),
               let shapeBuffer = input.forProperty("shapes"), context.exception == nil else { throw JavaScriptCoreEngineError.invalidInput }
-        var values: [Double] = []; values.reserveCapacity(count * 8)
-        var modes: [UInt16] = []; modes.reserveCapacity(count)
-        var ranges: [UInt32] = []; ranges.reserveCapacity(shapes.count * 3)
-        var offset: UInt32 = 0
-        for shape in shapes {
-            guard let length = UInt32(exactly: shape.vertices.count) else { throw JavaScriptCoreEngineError.invalidInput }
-            ranges.append(contentsOf: [shape.id.rawValue, offset, length])
-            offset += length
-            for vertex in shape.vertices {
-                values.append(contentsOf: [vertex.position.x, vertex.position.y, vertex.position.z, vertex.position.w,
-                                           vertex.rgba.x, vertex.rgba.y, vertex.rgba.z, vertex.rgba.w])
-                modes.append(vertex.mode.rawValue)
-            }
+        try buffer.withUnsafeBuffers { shapes, values, modes in
+            var ranges: [UInt32] = []; ranges.reserveCapacity(shapes.count * 3)
+            for shape in shapes { ranges.append(contentsOf: [shape.id.rawValue, shape.start, shape.count]) }
+            try writeArray(values, to: valueBuffer, type: kJSTypedArrayTypeFloat64Array)
+            try writeArray(modes, to: modeBuffer, type: kJSTypedArrayTypeUint16Array)
+            try ranges.withUnsafeBufferPointer { try writeArray($0, to: shapeBuffer, type: kJSTypedArrayTypeUint32Array) }
         }
-        try writeArray(values, to: valueBuffer, type: kJSTypedArrayTypeFloat64Array)
-        try writeArray(modes, to: modeBuffer, type: kJSTypedArrayTypeUint16Array)
-        try writeArray(ranges, to: shapeBuffer, type: kJSTypedArrayTypeUint32Array)
         return input
     }
 
-    private func writeArray<T>(_ values: [T], to target: JSValue, type: JSTypedArrayType) throws {
+    private func writeArray<T>(_ values: UnsafeBufferPointer<T>, to target: JSValue, type: JSTypedArrayType) throws {
         let jsContext = context.jsGlobalContextRef
         var exception: JSValueRef?
         guard JSValueGetTypedArrayType(jsContext, target.jsValueRef, &exception) == type, exception == nil,
@@ -126,15 +113,12 @@ public final class JavaScriptCoreEngine: LaserScriptEngine {
         let offset = JSObjectGetTypedArrayByteOffset(jsContext, object, &exception)
         guard exception == nil else { throw JavaScriptCoreEngineError.invalidInput }
         guard !values.isEmpty else { return }
-        guard let bytes = JSObjectGetTypedArrayBytesPtr(jsContext, object, &exception), exception == nil else {
-            throw JavaScriptCoreEngineError.invalidInput
-        }
-        values.withUnsafeBytes { source in
-            if let base = source.baseAddress { bytes.advanced(by: offset).copyMemory(from: base, byteCount: source.count) }
-        }
+        guard let bytes = JSObjectGetTypedArrayBytesPtr(jsContext, object, &exception), exception == nil,
+              let source = values.baseAddress else { throw JavaScriptCoreEngineError.invalidInput }
+        bytes.advanced(by: offset).copyMemory(from: source, byteCount: values.count * MemoryLayout<T>.stride)
     }
 
-    private func decode(_ output: JSValue) throws -> [Laser3DShape] {
+    private func decode(_ output: JSValue, into buffer: inout Laser3DBuffer) throws {
         guard let shapeCountValue = output.forProperty("shapeCount"), shapeCountValue.isNumber,
               let vertexCountValue = output.forProperty("vertexCount"), vertexCountValue.isNumber,
               let shapeCount32 = UInt32(exactly: shapeCountValue.toDouble()),
@@ -149,23 +133,13 @@ public final class JavaScriptCoreEngine: LaserScriptEngine {
         let shapes: [UInt32] = try copyArray(shapeValue, count: shapeCount * 3, type: kJSTypedArrayTypeUint32Array)
         let vertices: [Double] = try copyArray(vertexValue, count: vertexCount * 8, type: kJSTypedArrayTypeFloat64Array)
         let modes: [UInt16] = try copyArray(modeValue, count: vertexCount, type: kJSTypedArrayTypeUint16Array)
-        var result: [Laser3DShape] = []
-        result.reserveCapacity(shapeCount)
-        for i in 0..<shapeCount {
-            guard let start = Int(exactly: shapes[i * 3 + 1]), let length = Int(exactly: shapes[i * 3 + 2]),
-                  start <= vertexCount, length <= vertexCount - start else { throw JavaScriptCoreEngineError.invalidOutput }
-            var shapeVertices: [LaserVertex] = []
-            shapeVertices.reserveCapacity(length)
-            for j in start..<(start + length) {
-                let k = j * 8
-                guard let mode = LaserPointMode(rawValue: modes[j]),
-                      vertices[k..<(k + 8)].allSatisfy(\.isFinite) else { throw JavaScriptCoreEngineError.invalidOutput }
-                shapeVertices.append(LaserVertex(position: SIMD4(vertices[k], vertices[k + 1], vertices[k + 2], vertices[k + 3]),
-                                                 rgba: SIMD4(vertices[k + 4], vertices[k + 5], vertices[k + 6], vertices[k + 7]), mode: mode))
+        try shapes.withUnsafeBufferPointer { shapes in
+            try vertices.withUnsafeBufferPointer { vertices in
+                try modes.withUnsafeBufferPointer { modes in
+                    try buffer.replaceContents(shapes: shapes, values: vertices, modes: modes)
+                }
             }
-            result.append(Laser3DShape(id: LaserShapeID(shapes[i * 3]), vertices: shapeVertices))
         }
-        return result
     }
 
     private func copyArray<T>(_ value: JSValue, count: Int, type: JSTypedArrayType) throws -> [T] {

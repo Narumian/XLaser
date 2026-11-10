@@ -34,16 +34,6 @@ public struct LaserVertex: Equatable, Sendable {
     public func scaledAlpha(_ alpha: Double) -> LaserVertex { var v = self; v.rgba.w *= alpha; return v }
 }
 
-public struct Laser3DShape: Equatable, Sendable {
-    public var id: LaserShapeID
-    public var vertices: [LaserVertex]
-
-    public init(id: LaserShapeID, vertices: [LaserVertex]) { self.id = id; self.vertices = vertices }
-    public var isEmpty: Bool { vertices.isEmpty }
-
-    public static let blackCenter = Laser3DShape(id: 0, vertices: [LaserVertex(x: 0, y: 0, rgba: .zero, mode: .blank)])
-}
-
 public protocol Laser3DStream: Sendable {
     mutating func read(into output: inout Laser3DBuffer)
 }

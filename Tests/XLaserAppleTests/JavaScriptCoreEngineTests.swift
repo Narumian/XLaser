@@ -5,114 +5,105 @@ import XLaserApple
 import XLaser
 
 final class JavaScriptCoreEngineTests: XCTestCase {
+    private let context = LaserScriptReadContext(time: 0, sampleRate: 30000, frameLength: 1)
+
+    private func buffer(_ shapes: [(UInt32, [LaserVertex])]) throws -> Laser3DBuffer {
+        var result = Laser3DBuffer()
+        for (id, vertices) in shapes {
+            try result.beginShape(id: LaserShapeID(id))
+            for vertex in vertices { try result.appendVertex(vertex) }
+        }
+        return result
+    }
+
     func testDebugAssetChangesWithTime() throws {
         let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
         let source = try String(contentsOf: root.appendingPathComponent("Debug/RotatingLine.js"), encoding: .utf8)
         let engine = try JavaScriptCoreEngine(source: source)
-        let first = try engine.read(context: .init(time: 0, sampleRate: 30000, frameLength: 1000), inputs: [])
-        let second = try engine.read(context: .init(time: .pi / 2, sampleRate: 30000, frameLength: 1000), inputs: [])
-        XCTAssertEqual(first.count, 1)
-        XCTAssertEqual(first[0].vertices.count, 2)
-        XCTAssertEqual(first[0].vertices[1].position.x, 1, accuracy: 1e-12)
-        XCTAssertEqual(second[0].vertices[1].position.y, 1, accuracy: 1e-12)
-    }
-
-    func testExceptionStopsAsset() throws {
-        let engine = try JavaScriptCoreEngine(source: "function read() { throw new Error('broken'); }")
-        XCTAssertThrowsError(try engine.read(context: .init(time: 0, sampleRate: 30000, frameLength: 1000), inputs: [])) { error in
-            guard case JavaScriptCoreEngineError.javaScript(let message) = error else { return XCTFail("Unexpected error: \(error)") }
-            XCTAssertTrue(message.contains("broken"))
+        var output = Laser3DBuffer()
+        try engine.read(context: context, inputs: [], output: &output)
+        output.withUnsafeBuffers { shapes, values, _ in
+            XCTAssertEqual(shapes.count, 1); XCTAssertEqual(shapes[0].count, 2)
+            XCTAssertEqual(values[8], 1, accuracy: 1e-12)
         }
-        XCTAssertThrowsError(try engine.read(context: .init(time: 0, sampleRate: 30000, frameLength: 1000), inputs: [])) { error in
-            XCTAssertEqual(error as? JavaScriptCoreEngineError, .stopped)
-        }
+        try engine.read(context: .init(time: .pi / 2, sampleRate: 30000, frameLength: 1), inputs: [], output: &output)
+        output.withUnsafeBuffers { _, values, _ in XCTAssertEqual(values[9], 1, accuracy: 1e-12) }
     }
 
     func testInputThroughEngineProtocol() throws {
         let engine: any LaserScriptEngine = try JavaScriptCoreEngine(source: "function read(c, inputs, o) { for (const shape of inputs[0]) o.addShape(shape.id, shape.vertices); }")
-        let input = Laser3DShape(id: 42, vertices: [LaserVertex(x: 0.25, y: 0.5, z: 0.75)])
-        let result = try engine.read(context: .init(time: 0, sampleRate: 30000, frameLength: 1000), inputs: [[input]])
-        XCTAssertEqual(result, [input])
+        let input = try buffer([(42, [LaserVertex(x: 0.25, y: 0.5, z: 0.75)])])
+        var output = Laser3DBuffer()
+        try engine.read(context: context, inputs: [input], output: &output)
+        XCTAssertEqual(output, input)
     }
 
     func testTypedInputsCombineAndReuse() throws {
         let engine = try JavaScriptCoreEngine(source: "function read(c, inputs, output) { for (const input of inputs) output.addStream(input); }")
-        let a = Laser3DShape(id: 91, vertices: [LaserVertex(x: -0.25, y: 0.5, z: 2, w: 0.75, rgba: SIMD4(0.1, 0.2, 0.3, 0.4), mode: .blank)])
-        let empty = Laser3DShape(id: 77, vertices: [])
-        let b = Laser3DShape(id: 42, vertices: [LaserVertex(x: 2, y: -1, mode: .dwell)])
-        let context = LaserScriptReadContext(time: 0, sampleRate: 30000, frameLength: 1)
-        XCTAssertEqual(try engine.read(context: context, inputs: [[a, empty], [b]]), [a, empty, b])
-        XCTAssertEqual(try engine.read(context: context, inputs: [[], [empty]]), [empty])
-        XCTAssertEqual(try engine.read(context: context, inputs: [[b], [a]]), [b, a])
-        XCTAssertEqual(a.vertices[0].position.x, -0.25)
-        let many = (0..<20).map { index in
-            Laser3DShape(id: LaserShapeID(UInt32(index)), vertices: (0..<5).map { vertex in
-                LaserVertex(x: Double(index), y: Double(vertex), mode: .normal)
-            })
-        }
-        XCTAssertEqual(try engine.read(context: context, inputs: [many]), many)
+        let a = LaserVertex(x: -0.25, y: 0.5, z: 2, w: 0.75, rgba: SIMD4(0.1, 0.2, 0.3, 0.4), mode: .blank)
+        let b = LaserVertex(x: 2, y: -1, mode: .dwell)
+        let first = try buffer([(91, [a]), (77, [])]), second = try buffer([(42, [b])])
+        var output = Laser3DBuffer()
+        try engine.read(context: context, inputs: [first, second], output: &output)
+        XCTAssertEqual(output, try buffer([(91, [a]), (77, []), (42, [b])]))
+        try engine.read(context: context, inputs: [Laser3DBuffer(), try buffer([(77, [])])], output: &output)
+        XCTAssertEqual(output, try buffer([(77, [])]))
+        try engine.read(context: context, inputs: [second, first], output: &output)
+        XCTAssertEqual(output, try buffer([(42, [b]), (91, [a]), (77, [])]))
+        let many = try buffer((0..<20).map { index in (UInt32(index), (0..<5).map { LaserVertex(x: Double(index), y: Double($0)) }) })
+        try engine.read(context: context, inputs: [many], output: &output)
+        XCTAssertEqual(output, many)
     }
 
-    func testTypedInputInvalidRangeStopsAsset() throws {
-        let source = "function read(c, inputs, output) { inputs[0].shapes[1] = 999; output.addStream(inputs[0]); }"
-        let engine = try JavaScriptCoreEngine(source: source)
-        let input = Laser3DShape(id: 1, vertices: [LaserVertex(x: 0, y: 0)])
-        let context = LaserScriptReadContext(time: 0, sampleRate: 30000, frameLength: 1)
-        XCTAssertThrowsError(try engine.read(context: context, inputs: [[input]]))
-        XCTAssertThrowsError(try engine.read(context: context, inputs: [[input]])) { error in
-            XCTAssertEqual(error as? JavaScriptCoreEngineError, .stopped)
-        }
-    }
-
-    func testTypedArrayOutputGrowsAndResets() throws {
+    func testGrowthAndOffset() throws {
         let source = """
         function read(c, inputs, output) {
             for (let shape = 0; shape < 7; shape++) {
                 output.beginShape(shape + 1);
-                for (let i = 0; i < 5; i++)
-                    output.addVertex(i, shape, 2, 1, 0.1, 0.2, 0.3, 0.4, 2);
+                for (let i = 0; i < 5; i++) output.addVertex(i, shape, 2, 1, 0.1, 0.2, 0.3, 0.4, 2);
             }
-        }
-        """
-        let engine = try JavaScriptCoreEngine(source: source)
-        for _ in 0..<2 {
-            let shapes = try engine.read(context: .init(time: 0, sampleRate: 30000, frameLength: 1), inputs: [])
-            XCTAssertEqual(shapes.count, 7)
-            XCTAssertEqual(shapes.map { $0.vertices.count }, Array(repeating: 5, count: 7))
-            XCTAssertEqual(shapes[6].vertices[4], LaserVertex(x: 4, y: 6, z: 2, rgba: SIMD4(0.1, 0.2, 0.3, 0.4), mode: .blank))
-        }
-    }
-
-    func testTypedArrayWithOffset() throws {
-        let source = """
-        function read(c, inputs, output) {
-            output.beginShape(9);
-            output.addVertex(3, 4, 0, 1, 1, 1, 1, 1, 0);
-            const values = new Float64Array(16);
-            values.set(output.values.subarray(0, 8), 8);
+            const values = new Float64Array(output.values.length + 8);
+            values.set(output.values, 8);
             output.values = values.subarray(8);
         }
         """
         let engine = try JavaScriptCoreEngine(source: source)
-        let shapes = try engine.read(context: .init(time: 0, sampleRate: 30000, frameLength: 1), inputs: [])
-        XCTAssertEqual(shapes[0].vertices[0].position.x, 3)
-        XCTAssertEqual(shapes[0].vertices[0].position.y, 4)
-    }
-
-    func testRejectsNonFiniteTypedArrayValues() throws {
-        let engine = try JavaScriptCoreEngine(source: "function read(c, i, o) { o.beginShape(1); o.addVertex(0,0,0,1,1,1,1,1,0); o.values[0] = NaN; }")
-        XCTAssertThrowsError(try engine.read(context: .init(time: 0, sampleRate: 30000, frameLength: 1), inputs: [])) { error in
-            XCTAssertEqual(error as? JavaScriptCoreEngineError, .invalidOutput)
+        var output = Laser3DBuffer()
+        for _ in 0..<2 {
+            try engine.read(context: context, inputs: [], output: &output)
+            XCTAssertEqual(output.shapeCount, 7); XCTAssertEqual(output.vertexCount, 35)
+            output.withUnsafeBuffers { shapes, values, modes in
+                XCTAssertEqual(shapes[6].count, 5); XCTAssertEqual(values[34 * 8], 4)
+                XCTAssertEqual(values[34 * 8 + 1], 6); XCTAssertEqual(modes[34], LaserPointMode.blank.rawValue)
+            }
         }
     }
 
-    func testMalformedOutputStopsAsset() throws {
-        let engine = try JavaScriptCoreEngine(source: "function read(c, i, o) { o.beginShape(1); o.shapes[1] = 99; }")
-        XCTAssertThrowsError(try engine.read(context: .init(time: 0, sampleRate: 30000, frameLength: 1000), inputs: [])) { error in
-            XCTAssertEqual(error as? JavaScriptCoreEngineError, .invalidOutput)
-        }
-        XCTAssertThrowsError(try engine.read(context: .init(time: 0, sampleRate: 30000, frameLength: 1000), inputs: [])) { error in
-            XCTAssertEqual(error as? JavaScriptCoreEngineError, .stopped)
+    func testOutputCanBeReusedAsNextInput() throws {
+        let engine = try JavaScriptCoreEngine(source: "function read(c, inputs, output) { output.addStream(inputs[0]); }")
+        var output = try buffer([(42, [LaserVertex(x: 0.5, y: -1, mode: .blank)])])
+        let expected = output
+        try engine.read(context: context, inputs: [output], output: &output)
+        XCTAssertEqual(output, expected)
+    }
+
+    func testErrorsDiscardOutputAndStop() throws {
+        let cases: [(String, JavaScriptCoreEngineError?)] = [
+            ("function read() { throw new Error('broken'); }", nil),
+            ("function read(c, i, o) { o.beginShape(1); o.shapes[1] = 99; }", .invalidOutput),
+            ("function read(c, i, o) { o.beginShape(1); o.addVertex(0,0,0,1,1,1,1,1,0); o.values[0] = NaN; }", .invalidOutput),
+        ]
+        for (source, expected) in cases {
+            let engine = try JavaScriptCoreEngine(source: source)
+            var output = try buffer([(1, [LaserVertex(x: 1, y: 1)])])
+            XCTAssertThrowsError(try engine.read(context: context, inputs: [], output: &output)) { error in
+                if let expected { XCTAssertEqual(error as? JavaScriptCoreEngineError, expected) }
+                else if case JavaScriptCoreEngineError.javaScript = error {} else { XCTFail("Unexpected error: \(error)") }
+            }
+            XCTAssertTrue(output.isEmpty)
+            XCTAssertThrowsError(try engine.read(context: context, inputs: [], output: &output)) { error in
+                XCTAssertEqual(error as? JavaScriptCoreEngineError, .stopped)
+            }
         }
     }
 }

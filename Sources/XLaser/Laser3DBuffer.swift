@@ -8,9 +8,11 @@ public enum Laser3DBufferError: Error, Equatable, Sendable {
     case invalidCapacity
     case missingShape
     case vertexLimitExceeded
+    case invalidShape
+    case invalidVertex
 }
 
-public struct Laser3DBuffer: Sendable {
+public struct Laser3DBuffer: Sendable, Equatable {
     private var shapeStorage: [Laser3DShapeRange] = []
     private var vertexStorage: [Double] = []
     private var modeStorage: [UInt16] = []
@@ -50,6 +52,26 @@ public struct Laser3DBuffer: Sendable {
         vertexStorage.append(vertex.rgba.z); vertexStorage.append(vertex.rgba.w)
         modeStorage.append(vertex.mode.rawValue)
         shapeStorage[shapeStorage.count - 1].count += 1
+    }
+
+    public mutating func replaceContents(
+        shapes: UnsafeBufferPointer<UInt32>, values: UnsafeBufferPointer<Double>, modes: UnsafeBufferPointer<UInt16>
+    ) throws {
+        guard shapes.count % 3 == 0, modes.count <= Int.max / 8, values.count == modes.count * 8,
+              UInt64(modes.count) <= UInt64(UInt32.max) else { throw Laser3DBufferError.invalidShape }
+        for mode in modes where LaserPointMode(rawValue: mode) == nil { throw Laser3DBufferError.invalidVertex }
+        guard values.allSatisfy(\.isFinite) else { throw Laser3DBufferError.invalidVertex }
+        for i in stride(from: 0, to: shapes.count, by: 3) {
+            guard let start = Int(exactly: shapes[i + 1]), let count = Int(exactly: shapes[i + 2]),
+                  start <= modes.count, count <= modes.count - start else { throw Laser3DBufferError.invalidShape }
+        }
+        removeAll()
+        shapeStorage.reserveCapacity(shapes.count / 3)
+        for i in stride(from: 0, to: shapes.count, by: 3) {
+            shapeStorage.append(Laser3DShapeRange(id: LaserShapeID(shapes[i]), start: shapes[i + 1], count: shapes[i + 2]))
+        }
+        vertexStorage.append(contentsOf: values)
+        modeStorage.append(contentsOf: modes)
     }
 
     public func withUnsafeBuffers<Result>(

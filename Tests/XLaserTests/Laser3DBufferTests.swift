@@ -58,6 +58,24 @@ final class Laser3DBufferTests: XCTestCase {
         XCTAssertEqual(buffer.vertexCount, 1)
     }
 
+    func testInvalidReplacementLeavesExistingBufferUnchanged() throws {
+        var buffer = Laser3DBuffer()
+        try buffer.beginShape(id: 7)
+        try buffer.appendVertex(LaserVertex(x: 1, y: 2))
+        let expected = buffer
+        let shapes: [UInt32] = [1, 0, 2]
+        let values: [Double] = [0, 0, 0, 1, 1, 1, 1, 1]
+        let modes: [UInt16] = [0]
+        XCTAssertThrowsError(try shapes.withUnsafeBufferPointer { shapes in
+            try values.withUnsafeBufferPointer { values in
+                try modes.withUnsafeBufferPointer { modes in
+                    try buffer.replaceContents(shapes: shapes, values: values, modes: modes)
+                }
+            }
+        }) { error in XCTAssertEqual(error as? Laser3DBufferError, .invalidShape) }
+        XCTAssertEqual(buffer, expected)
+    }
+
     func testCopiesAreIndependent() throws {
         var first = Laser3DBuffer()
         try first.beginShape(id: 1)
