@@ -59,3 +59,7 @@ An asset's laser inputs use the same 3D shape semantics as its output, aligned w
 ## Vertex precision
 
 Position and color components use 64-bit floating-point values.
+
+## Execution errors
+
+If a read fails, its output must not be used and the asset must stop. The host may reinitialize the asset before running it again.
