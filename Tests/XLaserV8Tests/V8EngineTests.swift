@@ -317,12 +317,12 @@ final class V8EngineTests: XCTestCase {
         XCTAssertEqual(output.vertex(at: 1).position.x, 0.5, accuracy: 1e-12)
         let oneSecond = LaserReadContext(time: 1, sampleRate: 30000, frameLength: 100)
         try line.read(context: oneSecond, inputs: [:], output: &output)
-        XCTAssertEqual(output.vertex(at: 1).position.x, 0.5 * cos(1), accuracy: 1e-12)
+        XCTAssertEqual(output.vertex(at: 1).position.x, 0.5 * Float(cos(Double(1))), accuracy: 1e-6)
         let before = output
         try line.read(context: oneSecond, inputs: ["speed": .float(2)], output: &output)
         XCTAssertEqual(output, before)
         try line.read(context: .init(time: 2, sampleRate: 30000, frameLength: 100), inputs: ["speed": .float(2)], output: &output)
-        XCTAssertEqual(output.vertex(at: 1).position.x, 0.5 * cos(3), accuracy: 1e-12)
+        XCTAssertEqual(output.vertex(at: 1).position.x, 0.5 * Float(cos(Double(3))), accuracy: 1e-6)
 
         let circle: any LaserScriptable = try V8Engine(source: standardSource(.animations, "PulsingCircle.js"))
         try circle.read(context: context, inputs: [:], output: &output)
@@ -391,8 +391,8 @@ final class V8EngineTests: XCTestCase {
         for (time, speed, angle) in [(0.0, 1.0, 0.0), (1.0, 1.0, 1.0), (1.0, 2.0, 1.0), (2.0, 2.0, 3.0)] {
             try asset.read(context: .init(time: time, sampleRate: 30000, frameLength: 2), inputs: ["speed": .float(speed)], output: &output)
             output.withUnsafeBuffers { _, values, _ in
-                XCTAssertEqual(values[8], cos(angle), accuracy: 1e-12)
-                XCTAssertEqual(values[9], sin(angle), accuracy: 1e-12)
+                XCTAssertEqual(values[8], Float(cos(angle)), accuracy: 1e-6)
+                XCTAssertEqual(values[9], Float(sin(angle)), accuracy: 1e-6)
             }
         }
     }
