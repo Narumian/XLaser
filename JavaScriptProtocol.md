@@ -8,6 +8,10 @@
 - The header must identify the file as a LaserScript asset and specify its LaserScript protocol version.
 - The asset must define a `read(context, inputs, output)` function. The host calls it for each read, providing the read context, inputs, and output buffer.
 - Inputs are accessed by their declared names, for example `inputs.speed`.
+- `int` and `long` inputs are JavaScript numbers in the safe integer range. `vec2` and `point2D` use two-element arrays; `vec3` uses three elements, and `vec4` and `color` use four.
+- `enum` is a safe integer and `event` is a boolean indicating an event for the current read.
+- `array` is a JavaScript array. `matrix` is an object with `rows`, `columns`, and a row-major `values` array.
+- `image` has `width`, `height`, and an RGBA `Uint8Array` named `rgba`. `audio` has `sampleRate`, `channels`, and an interleaved `Float32Array` named `samples`. `audioFFT` has `sampleRate`, `fftSize`, and a `Float32Array` named `bins`.
 
 For example (the header key and version are illustrative):
 

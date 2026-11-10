@@ -11,6 +11,12 @@ typedef struct {
     const char *name;
     int kind;
     double number;
+    const char *json;
+    const void *media_data;
+    size_t media_count;
+    uint32_t dimension_a;
+    uint32_t dimension_b;
+    double sample_rate;
     const double *values;
     const uint16_t *modes;
     const uint32_t *shapes;

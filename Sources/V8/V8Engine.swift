@@ -65,41 +65,65 @@ public final class V8Engine: LaserScriptable {
 }
 
 private struct PackedInputs {
-    struct Range {
+    enum Kind {
+        case laser(vertexOffset: Int, shapeOffset: Int, vertices: Int, shapes: Int)
+        case number(Double)
+        case json(String)
+        case image(offset: Int, count: Int, width: UInt32, height: UInt32)
+        case audio(offset: Int, count: Int, channels: UInt32, sampleRate: Double)
+        case spectrum(offset: Int, count: Int, fftSize: UInt32, sampleRate: Double)
+    }
+    struct Entry {
         let name: String
-        let number: Double?
-        let vertexOffset: Int
-        let shapeOffset: Int
-        let vertexCount: Int
-        let shapeCount: Int
+        let kind: Kind
     }
 
     var values: [Double] = []
     var modes: [UInt16] = []
     var shapes: [UInt32] = []
-    var ranges: [Range] = []
+    var bytes: [UInt8] = []
+    var samples: [Float] = []
+    var entries: [Entry] = []
 
     init(_ inputs: [String: LaserInput]) throws {
         for (name, input) in inputs.sorted(by: { $0.key < $1.key }) {
             guard !name.utf8.contains(0) else { throw V8EngineError.invalidInput }
-            guard case .laser(let stream) = input else {
-                if case .float(let number) = input {
-                    guard number.isFinite else { throw V8EngineError.invalidInput }
-                    ranges.append(Range(name: name, number: number, vertexOffset: 0, shapeOffset: 0, vertexCount: 0, shapeCount: 0))
+            let kind: Kind
+            switch input {
+            case .laser(let stream):
+                let vertexOffset = modes.count, shapeOffset = shapes.count
+                guard UInt32(exactly: stream.shapeCount) != nil, UInt32(exactly: stream.vertexCount) != nil,
+                      stream.shapeCount <= (Int.max - shapeOffset) / 3,
+                      stream.vertexCount <= (Int.max - values.count) / 8 else { throw V8EngineError.invalidInput }
+                stream.withUnsafeBuffers { streamShapes, streamValues, streamModes in
+                    for shape in streamShapes { shapes.append(contentsOf: [shape.id.rawValue, shape.start, shape.count]) }
+                    values.append(contentsOf: streamValues)
+                    modes.append(contentsOf: streamModes)
                 }
-                continue
+                kind = .laser(vertexOffset: vertexOffset, shapeOffset: shapeOffset, vertices: stream.vertexCount, shapes: stream.shapeCount)
+            case .float(let number):
+                guard number.isFinite else { throw V8EngineError.invalidInput }
+                kind = .number(number)
+            case .image(let image):
+                guard let width = UInt32(exactly: image.width), let height = UInt32(exactly: image.height) else { throw V8EngineError.invalidInput }
+                let offset = bytes.count
+                bytes.append(contentsOf: image.rgba)
+                kind = .image(offset: offset, count: image.rgba.count, width: width, height: height)
+            case .audio(let audio):
+                guard let channels = UInt32(exactly: audio.channels) else { throw V8EngineError.invalidInput }
+                let offset = samples.count
+                samples.append(contentsOf: audio.samples)
+                kind = .audio(offset: offset, count: audio.samples.count, channels: channels, sampleRate: audio.sampleRate)
+            case .audioFFT(let spectrum):
+                guard let fftSize = UInt32(exactly: spectrum.fftSize) else { throw V8EngineError.invalidInput }
+                let offset = samples.count
+                samples.append(contentsOf: spectrum.bins)
+                kind = .spectrum(offset: offset, count: spectrum.bins.count, fftSize: fftSize, sampleRate: spectrum.sampleRate)
+            default:
+                guard let json = try? LaserScriptJavaScriptRuntime.encodeParameter(input) else { throw V8EngineError.invalidInput }
+                kind = .json(json)
             }
-            let vertexOffset = modes.count, shapeOffset = shapes.count
-            guard UInt32(exactly: stream.shapeCount) != nil, UInt32(exactly: stream.vertexCount) != nil,
-                  stream.shapeCount <= (Int.max - shapeOffset) / 3,
-                  stream.vertexCount <= (Int.max - values.count) / 8 else { throw V8EngineError.invalidInput }
-            stream.withUnsafeBuffers { streamShapes, streamValues, streamModes in
-                for shape in streamShapes { shapes.append(contentsOf: [shape.id.rawValue, shape.start, shape.count]) }
-                values.append(contentsOf: streamValues)
-                modes.append(contentsOf: streamModes)
-            }
-            ranges.append(Range(name: name, number: nil, vertexOffset: vertexOffset, shapeOffset: shapeOffset,
-                                vertexCount: stream.vertexCount, shapeCount: stream.shapeCount))
+            entries.append(Entry(name: name, kind: kind))
         }
     }
 
@@ -107,15 +131,44 @@ private struct PackedInputs {
         values.withUnsafeBufferPointer { values in
             modes.withUnsafeBufferPointer { modes in
                 shapes.withUnsafeBufferPointer { shapes in
-                    let names = ranges.map { strdup($0.name) }
-                    defer { for name in names { free(name) } }
-                    let descriptors = zip(ranges, names).map { range, name in
-                        XLaserV8Input(name: UnsafePointer(name), kind: range.number == nil ? 0 : 1, number: range.number ?? 0, values: values.baseAddress?.advanced(by: range.vertexOffset * 8),
-                                      modes: modes.baseAddress?.advanced(by: range.vertexOffset),
-                                      shapes: shapes.baseAddress?.advanced(by: range.shapeOffset),
-                                      vertex_count: range.vertexCount, shape_count: range.shapeCount)
+                    bytes.withUnsafeBufferPointer { bytes in
+                        samples.withUnsafeBufferPointer { samples in
+                            let names = entries.map { strdup($0.name) }
+                            defer { for name in names { free(name) } }
+                            let jsons = entries.map { entry -> UnsafeMutablePointer<CChar>? in
+                                if case .json(let json) = entry.kind { return strdup(json) }
+                                return nil
+                            }
+                            defer { for json in jsons { free(json) } }
+                            let descriptors = entries.indices.map { index in
+                                var descriptor = XLaserV8Input()
+                                descriptor.name = UnsafePointer(names[index])
+                                switch entries[index].kind {
+                                case .laser(let vertexOffset, let shapeOffset, let vertices, let shapeCount):
+                                    descriptor.kind = 0
+                                    descriptor.values = values.baseAddress?.advanced(by: vertexOffset * 8)
+                                    descriptor.modes = modes.baseAddress?.advanced(by: vertexOffset)
+                                    descriptor.shapes = shapes.baseAddress?.advanced(by: shapeOffset)
+                                    descriptor.vertex_count = vertices; descriptor.shape_count = shapeCount
+                                case .number(let value):
+                                    descriptor.kind = 1; descriptor.number = value
+                                case .json:
+                                    descriptor.kind = 2; descriptor.json = UnsafePointer(jsons[index])
+                                case .image(let offset, let count, let width, let height):
+                                    descriptor.kind = 3; descriptor.media_data = bytes.baseAddress.map { UnsafeRawPointer($0.advanced(by: offset)) }
+                                    descriptor.media_count = count; descriptor.dimension_a = width; descriptor.dimension_b = height
+                                case .audio(let offset, let count, let channels, let sampleRate):
+                                    descriptor.kind = 4; descriptor.media_data = samples.baseAddress.map { UnsafeRawPointer($0.advanced(by: offset)) }
+                                    descriptor.media_count = count; descriptor.dimension_a = channels; descriptor.sample_rate = sampleRate
+                                case .spectrum(let offset, let count, let fftSize, let sampleRate):
+                                    descriptor.kind = 5; descriptor.media_data = samples.baseAddress.map { UnsafeRawPointer($0.advanced(by: offset)) }
+                                    descriptor.media_count = count; descriptor.dimension_a = fftSize; descriptor.sample_rate = sampleRate
+                                }
+                                return descriptor
+                            }
+                            return descriptors.withUnsafeBufferPointer(body)
+                        }
                     }
-                    return descriptors.withUnsafeBufferPointer(body)
                 }
             }
         }

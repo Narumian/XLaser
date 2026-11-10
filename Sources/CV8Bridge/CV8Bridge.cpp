@@ -217,6 +217,41 @@ int xlv8_read(XLaserV8Runtime *runtime, double time, double sample_rate, double 
             }
             continue;
         }
+        if (input.kind == 2) {
+            v8::Local<v8::String> json;
+            v8::Local<v8::Value> value;
+            if (!input.json || !v8::String::NewFromUtf8(isolate, input.json).ToLocal(&json) ||
+                !v8::JSON::Parse(context, json).ToLocal(&value) ||
+                !js_inputs->CreateDataProperty(context, name, value).FromMaybe(false)) {
+                save_error(isolate, caught, "Invalid parameter input"); return 1;
+            }
+            continue;
+        }
+        if (input.kind >= 3 && input.kind <= 5) {
+            const bool image = input.kind == 3;
+            const size_t element_size = image ? sizeof(uint8_t) : sizeof(float);
+            const size_t maximum = image ? v8::Uint8Array::kMaxLength : v8::Float32Array::kMaxLength;
+            if (input.media_count > maximum || input.media_count > std::numeric_limits<size_t>::max() / element_size ||
+                (input.media_count && !input.media_data)) { error_message = "Invalid media buffer"; return 1; }
+            const size_t bytes = input.media_count * element_size;
+            auto buffer = v8::ArrayBuffer::New(isolate, bytes);
+            if (bytes) std::memcpy(buffer->GetBackingStore()->Data(), input.media_data, bytes);
+            v8::Local<v8::Value> array = image
+                ? v8::Local<v8::Value>(v8::Uint8Array::New(buffer, 0, input.media_count))
+                : v8::Local<v8::Value>(v8::Float32Array::New(buffer, 0, input.media_count));
+            auto media = v8::Object::New(isolate);
+            v8::Local<v8::String> key;
+            if (!v8::String::NewFromUtf8(isolate, image ? "rgba" : (input.kind == 4 ? "samples" : "bins")).ToLocal(&key) ||
+                !media->CreateDataProperty(context, key, array).FromMaybe(false) ||
+                (image && (!set_number(isolate, context, media, "width", input.dimension_a) ||
+                           !set_number(isolate, context, media, "height", input.dimension_b))) ||
+                (!image && (!set_number(isolate, context, media, "sampleRate", input.sample_rate) ||
+                            !set_number(isolate, context, media, input.kind == 4 ? "channels" : "fftSize", input.dimension_a))) ||
+                !js_inputs->CreateDataProperty(context, name, media).FromMaybe(false)) {
+                save_error(isolate, caught, "Unable to create media input"); return 1;
+            }
+            continue;
+        }
         if (input.kind != 0) { error_message = "Invalid input type"; return 1; }
         if (input.vertex_count > UINT32_MAX || input.shape_count > UINT32_MAX ||
             input.vertex_count > std::numeric_limits<size_t>::max() / (8 * sizeof(double)) ||

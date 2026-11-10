@@ -2,6 +2,12 @@ import XCTest
 import XLaser
 
 final class LaserDescriptorTests: XCTestCase {
+    func testAlternateTypeNamesUseTheSameCanonicalType() {
+        XCTAssertEqual(LaserDescriptor.Input(name: "a", type: "long").canonicalType, "int")
+        XCTAssertEqual(LaserDescriptor.Input(name: "b", type: "point2D").canonicalType, "vec2")
+        XCTAssertEqual(LaserDescriptor.Input(name: "c", type: "color").canonicalType, "color")
+    }
+
     func testHeaderRetainsInputDefaults() throws {
         let source = #"""
         /*{"NAME":"Example","INPUTS":[

@@ -17,6 +17,8 @@ public final class JavaScriptCoreEngine: LaserScriptable {
     private let context: JSContext
     private let invoke: JSValue
     private let makeInput: JSValue
+    private let parseParameter: JSValue
+    private let makeMediaArray: JSValue
     private var inputBuffers: [JSValue] = []
     private var stopped = false
 
@@ -34,6 +36,12 @@ public final class JavaScriptCoreEngine: LaserScriptable {
         guard let makeInput = context.evaluateScript("(function() { return new Laser3DInput(); })"),
               context.exception == nil else { throw JavaScriptCoreEngineError.runtimeUnavailable }
         self.makeInput = makeInput
+        guard let parseParameter = context.evaluateScript("(function() { const parse = JSON.parse; return text => parse(text); })()"),
+              context.exception == nil else { throw JavaScriptCoreEngineError.runtimeUnavailable }
+        self.parseParameter = parseParameter
+        guard let makeMediaArray = context.evaluateScript("(type, count) => type === 0 ? new Uint8Array(count) : new Float32Array(count)"),
+              context.exception == nil else { throw JavaScriptCoreEngineError.runtimeUnavailable }
+        self.makeMediaArray = makeMediaArray
         context.evaluateScript(source)
         if let exception = context.exception {
             throw JavaScriptCoreEngineError.javaScript(exception.toString() ?? "JavaScript exception")
@@ -72,6 +80,26 @@ public final class JavaScriptCoreEngine: LaserScriptable {
                 case .float(let number):
                     guard number.isFinite else { throw JavaScriptCoreEngineError.invalidInput }
                     object.setValue(number, forProperty: name)
+                case .image(let image):
+                    let media = try makeMediaObject(image.rgba, type: kJSTypedArrayTypeUint8Array, key: "rgba")
+                    media.setValue(image.width, forProperty: "width")
+                    media.setValue(image.height, forProperty: "height")
+                    object.setValue(media, forProperty: name)
+                case .audio(let audio):
+                    let media = try makeMediaObject(audio.samples, type: kJSTypedArrayTypeFloat32Array, key: "samples")
+                    media.setValue(audio.sampleRate, forProperty: "sampleRate")
+                    media.setValue(audio.channels, forProperty: "channels")
+                    object.setValue(media, forProperty: name)
+                case .audioFFT(let spectrum):
+                    let media = try makeMediaObject(spectrum.bins, type: kJSTypedArrayTypeFloat32Array, key: "bins")
+                    media.setValue(spectrum.sampleRate, forProperty: "sampleRate")
+                    media.setValue(spectrum.fftSize, forProperty: "fftSize")
+                    object.setValue(media, forProperty: name)
+                default:
+                    guard let json = try? LaserScriptJavaScriptRuntime.encodeParameter(value),
+                          let parameter = parseParameter.call(withArguments: [json]),
+                          context.exception == nil else { throw JavaScriptCoreEngineError.invalidInput }
+                    object.setValue(parameter, forProperty: name)
                 }
                 guard context.exception == nil else { throw JavaScriptCoreEngineError.invalidInput }
             }
@@ -93,6 +121,15 @@ public final class JavaScriptCoreEngine: LaserScriptable {
             stopped = true
             throw JavaScriptCoreEngineError.invalidOutput
         }
+    }
+
+    private func makeMediaObject<T>(_ values: [T], type: JSTypedArrayType, key: String) throws -> JSValue {
+        guard let array = makeMediaArray.call(withArguments: [type == kJSTypedArrayTypeUint8Array ? 0 : 1, values.count]),
+              let object = JSValue(newObjectIn: context), context.exception == nil else { throw JavaScriptCoreEngineError.invalidInput }
+        try values.withUnsafeBufferPointer { try writeArray($0, to: array, type: type) }
+        object.setValue(array, forProperty: key)
+        guard context.exception == nil else { throw JavaScriptCoreEngineError.invalidInput }
+        return object
     }
 
     private func encodeInput(_ buffer: Laser3DBuffer, index: Int) throws -> JSValue {
