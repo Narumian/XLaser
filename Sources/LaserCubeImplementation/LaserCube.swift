@@ -251,15 +251,9 @@ private actor LaserCubeSession: LaserOutputSession {
             try check(token)
             guard replies.count == packets.count else { throw LaserCubeError.malformedResponse }
             for (reply, sequence) in zip(replies, sequences) {
-                _ = try LaserCubeWire.bufferFree(reply, capacity: initialInfo.bufferSize, sequence: sequence)
-            }
-            let creditBegan = LaserCubeTrace.now()
-            let credit = try await resilient("credit", token: token) {
-                try await transport.exchange(Data([0x8a]), on: .command, timeout: .seconds(1))
+                free = try LaserCubeWire.bufferFree(reply, capacity: initialInfo.bufferSize, sequence: sequence)
             }
             try check(token)
-            free = try LaserCubeWire.bufferFree(credit, capacity: initialInfo.bufferSize)
-            LaserCubeTrace.note("credit", since: creditBegan, "queued=\(initialInfo.bufferSize - free)")
             LaserCubeTrace.level(queued: initialInfo.bufferSize - free)
             if free == initialInfo.bufferSize { underrun("after send (free=\(free))") } else { emptyReported = false }
             offset += count
