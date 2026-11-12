@@ -20,7 +20,7 @@ let package = Package(
     ],
     targets: [
         .target(name: "XLaser", resources: [.copy("Resources/LaserScript.js")]),
-        .target(name: "XLaserStandardLibrary", path: "StandardLibrary", resources: [.copy("Animations"), .copy("Effects")]),
+        .target(name: "XLaserStandardLibrary", path: "StandardLibrary", exclude: ["CONVENTION.md"], resources: [.copy("Animations"), .copy("Effects")]),
         .target(name: "XLaserApple", dependencies: ["XLaser"], path: "Sources/Apple"),
         .target(name: "CV8Bridge", cxxSettings: v8CXXSettings, linkerSettings: v8LinkerSettings),
         .target(name: "XLaserV8", dependencies: ["XLaser", "CV8Bridge"], path: "Sources/V8"),

@@ -14,7 +14,8 @@ Read these before writing. Do not copy their content into scripts, comments or t
 - `Protocol.md`: asset metadata, input types, read context, output/input/buffer rules, precision, errors.
 - `JavaScriptProtocol.md`: the JS file format, header, input value shapes, helpers, `.ls` packages.
 - `Sources/XLaser/Resources/LaserScript.js`: the real runtime. When a doc and this file disagree, the code wins. Check here for what `output.*`, `Vertex`, `Color`, `Mode` actually do.
-- `README.md` is not to be edited by agents.
+- `StandardLibrary/CONVENTION.md`: how library assets are laid out, named, headed and written (Japanese). Follow it when adding or changing anything under `StandardLibrary/`.
+- `README.md` is not to be edited by agents unless the user asks.
 
 ## Writing an asset
 
