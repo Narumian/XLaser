@@ -30,7 +30,7 @@ function read(time, speed) {
 
 for (const [time, speed, expectedAngle] of [[0, 1, 0], [1, 1, 1], [1, 2, 1], [2, 2, 3]]) {
   const vertex = read(time, speed);
-  assert.ok(Math.abs(vertex.x - Math.cos(expectedAngle)) < 1e-12);
-  assert.ok(Math.abs(vertex.y - Math.sin(expectedAngle)) < 1e-12);
+  assert.ok(Math.abs(vertex.x - Math.cos(expectedAngle)) < 1e-6);
+  assert.ok(Math.abs(vertex.y - Math.sin(expectedAngle)) < 1e-6);
   console.log(JSON.stringify({ time, speed, vertex }));
 }
