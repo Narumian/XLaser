@@ -44,11 +44,14 @@ The host provides a reusable output buffer for the asset to write into. The outp
 
 Each shape has an identifier and a range of vertices. Each vertex has a four-component position, a four-component RGBA color, and a point mode: normal, dwell, or blank.
 
+Each shape also has a model matrix and a tint. The model matrix is a 4×4 matrix, defaulting to identity. The tint is an RGBA color, defaulting to white (1, 1, 1, 1). Vertex positions are in the shape's local space. The host applies the model matrix to every vertex position, and multiplies every vertex color component by the tint, when it converts the shapes to the output space. Both are evaluated once per shape rather than being written into the vertices.
+
 The output supports a variable number of shapes and vertices. `frameLength` is a hint, not a strict output limit.
 
 ## Input
 
 An asset's laser inputs use the same 3D shape representation as its output. Each read operates on the shape data provided for that read.
+The host applies each input shape's model matrix and tint to its vertices before the read, so every input shape has an identity model matrix and a white tint.
 Inputs are read-only and valid only during the current read. The asset must not modify inputs or retain references to them after the read. Behavior on violation is undefined.
 
 ## Buffer management
@@ -60,7 +63,7 @@ A read's output is valid until the next read for that asset begins. To retain it
 
 ## Vertex precision
 
-Position and color components use 32-bit floating-point values.
+Position and color components, model matrices, and tints use 32-bit floating-point values. They must be finite.
 
 ## Execution errors
 
