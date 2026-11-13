@@ -87,6 +87,8 @@ public struct Laser3DBuffer: Sendable, Equatable {
                            mode: LaserPointMode(rawValue: modeStorage[index])!)
     }
 
+    /// Maps every vertex in the shape's own (local) space. A shape's model matrix and tint are not
+    /// applied and are kept as they are; call `baked()` first to edit the vertices as placed.
     public func mapVertices(_ transform: (LaserVertex, Int, Int) -> LaserVertex) -> Laser3DBuffer {
         var result = self
         for shape in shapeStorage {
@@ -280,11 +282,24 @@ public struct Laser3DBuffer: Sendable, Equatable {
 
     /// Applies `matrix` after each shape's own model matrix. Costs one pass over the shapes, not the vertices.
     public func transformed(by matrix: simd_float4x4) -> Laser3DBuffer {
+        guard !shapeStorage.isEmpty else { return self }
         var result = self
-        for shape in 0..<shapeStorage.count {
-            var attributes = self.attributes(at: shape)
-            attributes.matrix = matrix * attributes.matrix
-            result.write(attributes, at: shape)
+        let applied: [Float] = (0..<4).flatMap { row in (0..<4).map { column in matrix[column][row] } }   // row-major
+        matrixStorage.withUnsafeBufferPointer { old in
+            result.matrixStorage.withUnsafeMutableBufferPointer { new in
+                applied.withUnsafeBufferPointer { m in
+                    for offset in stride(from: 0, to: old.count, by: 16) {
+                        for row in 0..<4 {
+                            for column in 0..<4 {
+                                new[offset + row * 4 + column] = m[row * 4] * old[offset + column]
+                                    + m[row * 4 + 1] * old[offset + 4 + column]
+                                    + m[row * 4 + 2] * old[offset + 8 + column]
+                                    + m[row * 4 + 3] * old[offset + 12 + column]
+                            }
+                        }
+                    }
+                }
+            }
         }
         return result
     }
