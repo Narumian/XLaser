@@ -16,11 +16,11 @@ func makeInput(vertices: Int, shapes: Int) throws -> Laser3DBuffer {
     return buffer
 }
 
-func benchmark(_ name: String, source: String, inputs: [String: LaserInput], vertices: Int, iterations: Int) throws {
+func benchmark(_ name: String, source: String, inputs: [String: LaserInput], vertices: Int, iterations: Int, shapes: Int = 10) throws {
     let engine: any LaserScriptable = try JavaScriptCoreEngine(source: source)
     let context = LaserReadContext(time: 0, sampleRate: 30000, frameLength: vertices)
     var output = Laser3DBuffer()
-    try output.reserveCapacity(shapes: 10, vertices: vertices)
+    try output.reserveCapacity(shapes: shapes, vertices: vertices)
     for _ in 0..<10 { try engine.read(context: context, inputs: inputs, output: &output) }
     let start = DispatchTime.now().uptimeNanoseconds
     var total = 0
@@ -30,7 +30,7 @@ func benchmark(_ name: String, source: String, inputs: [String: LaserInput], ver
     }
     guard total == vertices * iterations else { throw BenchError.invalidOutput }
     let elapsed = Double(DispatchTime.now().uptimeNanoseconds - start) / 1e6 / Double(iterations)
-    print("\(name) shapes=10 vertices=\(vertices) ms/read=\(String(format: "%.3f", elapsed))")
+    print("\(name) shapes=\(shapes) vertices=\(vertices) ms/read=\(String(format: "%.3f", elapsed))")
 }
 
 enum BenchError: Error { case invalidOutput }
@@ -44,6 +44,10 @@ function read(c, inputs, output) {
     }
 }
 """, inputs: [:], vertices: 1000, iterations: 100)
+
+let rotateSource = try String(contentsOfFile: CommandLine.arguments.dropFirst().first ?? "StandardLibrary/Effects/Rotate.js", encoding: .utf8)
+let bigInput = try makeInput(vertices: 10000, shapes: 100)
+try benchmark("jsc-rotate", source: rotateSource, inputs: ["source": .laser(bigInput), "angle": .float(30)], vertices: 10000, iterations: 100, shapes: 100)
 #else
 print("LaserScriptBench requires JavaScriptCore.")
 #endif
