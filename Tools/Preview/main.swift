@@ -446,6 +446,9 @@ func run() throws {
             frameInputs[source.name] = .laser(buffer)
         }
         try engine.read(context: context, inputs: frameInputs, output: &output)
+        // Shapes carry a model matrix and tint; the stats and the picture show them applied.
+        let hadAttributes = output.hasShapeAttributes
+        if hadAttributes { output = output.baked() }
         let selected = output.shapes.filter { options.onlyShapes?.contains($0.id.rawValue) ?? true }
         var total = Stats()
         var perShape: [(shape: Laser3DShapeRange, stats: Stats)] = []
@@ -454,7 +457,7 @@ func run() throws {
             total.add(summary)
             perShape.append((shape, summary))
         }
-        var header = "[\(frame)] t=\(time) shapes=\(output.shapeCount)"
+        var header = "[\(frame)] t=\(time) shapes=\(output.shapeCount)" + (hadAttributes ? " (model matrices/tints applied)" : "")
         if options.onlyShapes != nil { header += " (showing \(selected.count))" }
         print("\(header) \(total.text)")
         if total.vertices == 0 { print("    empty output") }
