@@ -77,9 +77,11 @@ static void allocate_buffer(const v8::FunctionCallbackInfo<v8::Value> &args) {
     v8::String::Utf8Value type(isolate, args[0]);
     const double requested = args[1].As<v8::Number>()->Value();
     size_t element_size = 0, maximum = 0;
-    if (*type && std::strcmp(*type, "float32") == 0) { element_size = sizeof(float); maximum = v8::Float32Array::kMaxLength; }
-    else if (*type && std::strcmp(*type, "uint16") == 0) { element_size = sizeof(uint16_t); maximum = v8::Uint16Array::kMaxLength; }
-    else if (*type && std::strcmp(*type, "uint32") == 0) { element_size = sizeof(uint32_t); maximum = v8::Uint32Array::kMaxLength; }
+    // float32 and uint32 have the same size, so the array type is chosen by name, not by size.
+    enum { Float32, Uint16, Uint32 } kind = Float32;
+    if (*type && std::strcmp(*type, "float32") == 0) { kind = Float32; element_size = sizeof(float); maximum = v8::Float32Array::kMaxLength; }
+    else if (*type && std::strcmp(*type, "uint16") == 0) { kind = Uint16; element_size = sizeof(uint16_t); maximum = v8::Uint16Array::kMaxLength; }
+    else if (*type && std::strcmp(*type, "uint32") == 0) { kind = Uint32; element_size = sizeof(uint32_t); maximum = v8::Uint32Array::kMaxLength; }
     if (!element_size || !std::isfinite(requested) || requested < 0 || std::floor(requested) != requested || requested > static_cast<double>(maximum)) {
         isolate->ThrowException(v8::Exception::RangeError(v8::String::NewFromUtf8Literal(isolate, "Invalid buffer size")));
         return;
@@ -92,8 +94,8 @@ static void allocate_buffer(const v8::FunctionCallbackInfo<v8::Value> &args) {
     }
     auto backing = v8::ArrayBuffer::NewBackingStore(data, bytes, release_buffer, nullptr);
     auto buffer = v8::ArrayBuffer::New(isolate, std::move(backing));
-    if (element_size == sizeof(float)) args.GetReturnValue().Set(v8::Float32Array::New(buffer, 0, count));
-    else if (element_size == sizeof(uint16_t)) args.GetReturnValue().Set(v8::Uint16Array::New(buffer, 0, count));
+    if (kind == Float32) args.GetReturnValue().Set(v8::Float32Array::New(buffer, 0, count));
+    else if (kind == Uint16) args.GetReturnValue().Set(v8::Uint16Array::New(buffer, 0, count));
     else args.GetReturnValue().Set(v8::Uint32Array::New(buffer, 0, count));
 }
 
