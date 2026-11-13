@@ -136,6 +136,8 @@ public final class JavaScriptCoreEngine: LaserScriptable {
     }
 
     private func encodeInput(_ buffer: Laser3DBuffer, index: Int) throws -> JSValue {
+        // Scripts read vertices as they are, so each input's model matrices and tints are applied first.
+        let buffer = buffer.baked()
         guard UInt32(exactly: buffer.vertexCount) != nil, UInt32(exactly: buffer.shapeCount) != nil,
               buffer.shapeCount <= Int.max / 3 else { throw JavaScriptCoreEngineError.invalidInput }
         while inputBuffers.count <= index {
@@ -183,16 +185,25 @@ public final class JavaScriptCoreEngine: LaserScriptable {
               shapeCount <= Int.max / 3, vertexCount <= Int.max / 8,
               let shapeValue = output.forProperty("shapes"),
               let vertexValue = output.forProperty("values"),
-              let modeValue = output.forProperty("modes"), context.exception == nil else {
+              let modeValue = output.forProperty("modes"),
+              let matrixValue = output.forProperty("shapeMatrices"),
+              let colorValue = output.forProperty("shapeColors"), context.exception == nil,
+              shapeCount <= Int.max / 16 else {
             throw JavaScriptCoreEngineError.invalidOutput
         }
         let shapes: [UInt32] = try copyArray(shapeValue, count: shapeCount * 3, type: kJSTypedArrayTypeUint32Array)
         let vertices: [Float] = try copyArray(vertexValue, count: vertexCount * 8, type: kJSTypedArrayTypeFloat32Array)
         let modes: [UInt16] = try copyArray(modeValue, count: vertexCount, type: kJSTypedArrayTypeUint16Array)
+        let matrices: [Float] = try copyArray(matrixValue, count: shapeCount * 16, type: kJSTypedArrayTypeFloat32Array)
+        let tints: [Float] = try copyArray(colorValue, count: shapeCount * 4, type: kJSTypedArrayTypeFloat32Array)
         try shapes.withUnsafeBufferPointer { shapes in
             try vertices.withUnsafeBufferPointer { vertices in
                 try modes.withUnsafeBufferPointer { modes in
-                    try buffer.replaceContents(shapes: shapes, values: vertices, modes: modes)
+                    try matrices.withUnsafeBufferPointer { matrices in
+                        try tints.withUnsafeBufferPointer { tints in
+                            try buffer.replaceContents(shapes: shapes, values: vertices, modes: modes, matrices: matrices, tints: tints)
+                        }
+                    }
                 }
             }
         }

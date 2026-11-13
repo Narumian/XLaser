@@ -29,6 +29,10 @@ typedef struct {
     const uint32_t *shapes;
     size_t vertex_count;
     size_t shape_count;
+    /* 16 row-major floats per shape. */
+    const float *shape_matrices;
+    /* 4 RGBA floats per shape. */
+    const float *shape_tints;
 } XLaserV8Output;
 int xlv8_available(void);
 XLaserV8Runtime *xlv8_create(const char *runtime, const char *source);

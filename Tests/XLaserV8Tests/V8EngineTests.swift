@@ -1,5 +1,6 @@
 import XCTest
 import Foundation
+import simd
 import XLaser
 import XLaserStandardLibrary
 import XLaserV8
@@ -424,6 +425,105 @@ final class V8EngineTests: XCTestCase {
             XCTAssertThrowsError(try engine.read(context: context, inputs: [:], output: &output)) { error in
                 XCTAssertEqual(error as? V8EngineError, .stopped)
             }
+        }
+    }
+
+    // MARK: Shape attributes
+
+    private func translation(_ x: Float, _ y: Float) -> simd_float4x4 {
+        var m = matrix_identity_float4x4
+        m.columns.3 = SIMD4(x, y, 0, 1)
+        return m
+    }
+
+    func testBeginShapeOptionsReachTheBuffer() throws {
+        let source = """
+        function read(c, i, o) {
+          o.beginShape(1, { matrix: [1,0,0,2, 0,1,0,3, 0,0,1,0, 0,0,0,1], color: [0.5, 1, 1, 0.5] });
+          o.addVertex(1, 1, 0, 1, 1, 1, 1, 1, 0);
+          o.beginShape(2);
+          o.addVertex(1, 1, 0, 1, 1, 1, 1, 1, 0);
+        }
+        """
+        let engine = try V8Engine(source: source)
+        var output = Laser3DBuffer()
+        try engine.read(context: context, inputs: [:], output: &output)
+        XCTAssertEqual(output.attributes(at: 0), Laser3DShapeAttributes(matrix: translation(2, 3), tint: SIMD4(0.5, 1, 1, 0.5)))
+        XCTAssertEqual(output.attributes(at: 1), .identity)
+        XCTAssertEqual(output.vertex(at: 0).position, SIMD4(1, 1, 0, 1), "vertices stay local")
+    }
+
+    func testAddStreamOptionsApplyToEveryAppendedShape() throws {
+        let source = """
+        function read(c, inputs, o) {
+          o.addStream(inputs.first);
+          o.addStream(inputs.first, { matrix: [1,0,0,0, 0,1,0,5, 0,0,1,0, 0,0,0,1], color: [1, 1, 1, 0.25] });
+        }
+        """
+        let engine = try V8Engine(source: source)
+        var output = Laser3DBuffer()
+        try engine.read(context: context, inputs: ["first": .laser(try buffer([(1, [LaserVertex(x: 0, y: 0)]), (2, [LaserVertex(x: 1, y: 0)])]))], output: &output)
+        XCTAssertEqual(output.shapes.map(\.id.rawValue), [1, 2, 1, 2])
+        XCTAssertEqual((0..<4).map { output.attributes(at: $0).matrix == translation(0, 5) }, [false, false, true, true])
+        XCTAssertEqual((0..<4).map { output.attributes(at: $0).tint.w }, [1, 1, 0.25, 0.25])
+    }
+
+    func testInputsAreBakedBeforeTheScriptReadsThem() throws {
+        var input = Laser3DBuffer()
+        try input.beginShape(id: 1, attributes: Laser3DShapeAttributes(matrix: translation(2, 3), tint: SIMD4(0.5, 0.5, 0.5, 1)))
+        try input.appendVertex(LaserVertex(x: 1, y: 1))
+        let engine = try V8Engine(source: "function read(c, inputs, o) { o.addStream(inputs.first); }")
+        var output = Laser3DBuffer()
+        try engine.read(context: context, inputs: ["first": .laser(input)], output: &output)
+        XCTAssertEqual(output.vertex(at: 0).position, SIMD4(3, 4, 0, 1))
+        XCTAssertEqual(output.vertex(at: 0).rgba, SIMD4(0.5, 0.5, 0.5, 1))
+        XCTAssertFalse(output.hasShapeAttributes)
+    }
+
+    func testShapeAttributesSurviveGrowthAndCanBeWrittenInPlace() throws {
+        let source = """
+        function read(c, i, o) {
+          for (let shape = 0; shape < 50; shape++) {
+            o.beginShape(shape, { matrix: [1,0,0,shape, 0,1,0,0, 0,0,1,0, 0,0,0,1] });
+            o.addVertex(0, 0, 0, 1, 1, 1, 1, 1, 0);
+          }
+          o.shapeColors[4 * 7 + 1] = 0.125;
+          o.shapeMatrices[16 * 9 + 7] = 4;
+        }
+        """
+        let engine = try V8Engine(source: source)
+        var output = Laser3DBuffer()
+        try engine.read(context: context, inputs: [:], output: &output)
+        XCTAssertEqual(output.shapeCount, 50)
+        for shape in 0..<50 where shape != 9 { XCTAssertEqual(output.attributes(at: shape).matrix, translation(Float(shape), 0)) }
+        XCTAssertEqual(output.attributes(at: 9).matrix, translation(9, 4))
+        XCTAssertEqual(output.attributes(at: 7).tint, SIMD4(1, 0.125, 1, 1))
+    }
+
+    func testReusedOutputDoesNotKeepPreviousAttributes() throws {
+        let source = "function read(c, i, o) { o.beginShape(1, c.time > 0 ? {} : { color: [0, 0, 0, 1] }); o.addVertex(0,0,0,1,1,1,1,1,0); }"
+        let engine = try V8Engine(source: source)
+        var output = Laser3DBuffer()
+        try engine.read(context: context, inputs: [:], output: &output)
+        XCTAssertEqual(output.attributes(at: 0).tint, SIMD4(0, 0, 0, 1))
+        try engine.read(context: .init(time: 1, sampleRate: 30000, frameLength: 1), inputs: [:], output: &output)
+        XCTAssertEqual(output.attributes(at: 0), .identity)
+    }
+
+    func testInvalidShapeOptionsFailTheRead() throws {
+        let cases = [
+            "o.beginShape(1, { matrix: [1, 2, 3] });",
+            "o.beginShape(1, { matrix: new Array(16).fill(NaN) });",
+            "o.beginShape(1, { color: [1, 1, 1] });",
+            "o.beginShape(1, { color: [1, 1, 1, Infinity] });",
+            "o.beginShape(1); o.shapeMatrices[0] = NaN;",
+            "o.beginShape(1); o.shapeColors[2] = Infinity;",
+        ]
+        for body in cases {
+            let engine = try V8Engine(source: "function read(c, i, o) { \(body) }")
+            var output = try buffer([(1, [LaserVertex(x: 1, y: 1)])])
+            XCTAssertThrowsError(try engine.read(context: context, inputs: [:], output: &output), body)
+            XCTAssertTrue(output.isEmpty)
         }
     }
 }

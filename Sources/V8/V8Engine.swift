@@ -54,14 +54,17 @@ public final class V8Engine: LaserScriptable {
 
     private func decode(_ output: XLaserV8Output, into buffer: inout Laser3DBuffer) throws {
         let count = output.vertex_count, shapeCount = output.shape_count
-        guard count >= 0, shapeCount >= 0, count <= Int.max / 8, shapeCount <= Int.max / 3,
+        guard count >= 0, shapeCount >= 0, count <= Int.max / 8, shapeCount <= Int.max / 16,
               count == 0 || (output.values != nil && output.modes != nil),
-              shapeCount == 0 || output.shapes != nil else { throw V8EngineError.invalidOutput }
+              shapeCount == 0 || (output.shapes != nil && output.shape_matrices != nil && output.shape_tints != nil)
+        else { throw V8EngineError.invalidOutput }
         do {
             try buffer.replaceContents(
                 shapes: UnsafeBufferPointer(start: output.shapes, count: shapeCount * 3),
                 values: UnsafeBufferPointer(start: output.values, count: count * 8),
-                modes: UnsafeBufferPointer(start: output.modes, count: count))
+                modes: UnsafeBufferPointer(start: output.modes, count: count),
+                matrices: UnsafeBufferPointer(start: output.shape_matrices, count: shapeCount * 16),
+                tints: UnsafeBufferPointer(start: output.shape_tints, count: shapeCount * 4))
         } catch { throw V8EngineError.invalidOutput }
     }
 }
@@ -93,6 +96,8 @@ private struct PackedInputs {
             let kind: Kind
             switch input {
             case .laser(let stream):
+                // Scripts read vertices as they are, so the model matrices and tints are applied first.
+                let stream = stream.baked()
                 let vertexOffset = modes.count, shapeOffset = shapes.count
                 guard UInt32(exactly: stream.shapeCount) != nil, UInt32(exactly: stream.vertexCount) != nil,
                       stream.shapeCount <= (Int.max - shapeOffset) / 3,

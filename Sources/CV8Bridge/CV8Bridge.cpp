@@ -19,6 +19,8 @@ struct XLaserV8Runtime {
     std::shared_ptr<v8::BackingStore> values;
     std::shared_ptr<v8::BackingStore> modes;
     std::shared_ptr<v8::BackingStore> shapes;
+    std::shared_ptr<v8::BackingStore> shape_matrices;
+    std::shared_ptr<v8::BackingStore> shape_tints;
 };
 
 static thread_local std::string error_message;
@@ -56,6 +58,7 @@ void xlv8_destroy(XLaserV8Runtime *runtime) {
             v8::Isolate::Scope isolate_scope(runtime->isolate);
             runtime->read.Reset(); runtime->make_input.Reset(); runtime->context.Reset();
             runtime->values.reset(); runtime->modes.reset(); runtime->shapes.reset();
+            runtime->shape_matrices.reset(); runtime->shape_tints.reset();
         }
         runtime->isolate->Dispose();
     }
@@ -288,24 +291,30 @@ int xlv8_read(XLaserV8Runtime *runtime, double time, double sample_rate, double 
     }
     if (!result->IsObject()) { error_message = "Invalid output"; return 2; }
     auto object = result.As<v8::Object>();
-    v8::Local<v8::Value> shape_count_value, vertex_count_value, shapes, values, modes;
+    v8::Local<v8::Value> shape_count_value, vertex_count_value, shapes, values, modes, shape_matrices, shape_tints;
     size_t shape_count, vertex_count;
     const float *output_values = nullptr;
     const uint16_t *output_modes = nullptr;
     const uint32_t *output_shapes = nullptr;
+    const float *output_matrices = nullptr;
+    const float *output_tints = nullptr;
     if (!get_property(isolate, context, object, "shapeCount", &shape_count_value) ||
         !get_property(isolate, context, object, "vertexCount", &vertex_count_value) ||
         !get_count(shape_count_value, &shape_count) || !get_count(vertex_count_value, &vertex_count) ||
-        shape_count > std::numeric_limits<size_t>::max() / 3 || vertex_count > std::numeric_limits<size_t>::max() / 8 ||
+        shape_count > std::numeric_limits<size_t>::max() / 16 || vertex_count > std::numeric_limits<size_t>::max() / 8 ||
         !get_property(isolate, context, object, "shapes", &shapes) ||
         !get_property(isolate, context, object, "values", &values) ||
         !get_property(isolate, context, object, "modes", &modes) ||
+        !get_property(isolate, context, object, "shapeMatrices", &shape_matrices) ||
+        !get_property(isolate, context, object, "shapeColors", &shape_tints) ||
         !output_view(shapes, shape_count * 3, &runtime->shapes, &output_shapes) ||
         !output_view(values, vertex_count * 8, &runtime->values, &output_values) ||
-        !output_view(modes, vertex_count, &runtime->modes, &output_modes)) {
+        !output_view(modes, vertex_count, &runtime->modes, &output_modes) ||
+        !output_view(shape_matrices, shape_count * 16, &runtime->shape_matrices, &output_matrices) ||
+        !output_view(shape_tints, shape_count * 4, &runtime->shape_tints, &output_tints)) {
         error_message = "Invalid output"; return 2;
     }
-    *output = {output_values, output_modes, output_shapes, vertex_count, shape_count};
+    *output = {output_values, output_modes, output_shapes, vertex_count, shape_count, output_matrices, output_tints};
     return 0;
 }
 

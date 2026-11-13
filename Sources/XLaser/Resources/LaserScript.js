@@ -91,9 +91,46 @@ class Laser3DBuffer {
     this.values = allocate("float32", 8 * 16);
     this.modes = allocate("uint16", 16);
     this.shapes = allocate("uint32", 3 * 4);
+    this.shapeMatrices = allocate("float32", 16 * 4);
+    this.shapeColors = allocate("float32", 4 * 4);
     this.vertexCount = 0;
     this.shapeCount = 0;
     this.reservation = null;
+  }
+
+  ensureShapeCapacity(count) {
+    if (this.shapes.length >= count * 3) return;
+    const capacity = Math.max(count, (this.shapes.length / 3) * 2);
+    const shapes = this.allocate("uint32", capacity * 3);
+    const matrices = this.allocate("float32", capacity * 16);
+    const colors = this.allocate("float32", capacity * 4);
+    shapes.set(this.shapes); matrices.set(this.shapeMatrices); colors.set(this.shapeColors);
+    this.shapes = shapes; this.shapeMatrices = matrices; this.shapeColors = colors;
+  }
+
+  parseShapeOptions(options) {
+    if (options === undefined || options === null) return null;
+    if (typeof options !== "object") throw new TypeError("Invalid shape options");
+    let matrix = options.matrix, color = options.color;
+    if (matrix !== undefined) {
+      if (matrix !== null && matrix.rows === 4 && matrix.columns === 4) matrix = matrix.values;
+      if ((!Array.isArray(matrix) && !ArrayBuffer.isView(matrix)) || matrix.length !== 16)
+        throw new TypeError("Expected a 4x4 matrix");
+      for (let i = 0; i < 16; i++) if (!Number.isFinite(matrix[i])) throw new TypeError("Invalid matrix");
+    }
+    if (color !== undefined) {
+      if ((!Array.isArray(color) && !ArrayBuffer.isView(color)) || color.length !== 4)
+        throw new TypeError("Invalid color");
+      for (let i = 0; i < 4; i++) if (!Number.isFinite(color[i])) throw new TypeError("Invalid color");
+    }
+    return { matrix, color };
+  }
+
+  writeShapeOptions(shape, parsed) {
+    const m = shape * 16, c = shape * 4;
+    const matrix = parsed === null ? undefined : parsed.matrix, color = parsed === null ? undefined : parsed.color;
+    for (let i = 0; i < 16; i++) this.shapeMatrices[m + i] = matrix === undefined ? (i % 5 === 0 ? 1 : 0) : matrix[i];
+    for (let i = 0; i < 4; i++) this.shapeColors[c + i] = color === undefined ? 1 : color[i];
   }
 
   reset() {
@@ -110,10 +147,7 @@ class Laser3DBuffer {
     if (!Number.isInteger(shapes) || shapes < 0 || shapes > 0xffffffff ||
         !Number.isInteger(vertices) || vertices < 0 || vertices > 0xffffffff)
       throw new RangeError("Invalid buffer capacity");
-    if (this.shapes.length < shapes * 3) {
-      const next = this.allocate("uint32", Math.max(shapes * 3, this.shapes.length * 2));
-      next.set(this.shapes); this.shapes = next;
-    }
+    this.ensureShapeCapacity(shapes);
     if (this.modes.length < vertices) {
       const size = Math.min(0xffffffff, Math.max(vertices, this.modes.length * 2));
       const modes = this.allocate("uint16", size);
@@ -145,20 +179,18 @@ class Laser3DBuffer {
     this.reservation = null;
   }
 
-  beginShape(id) {
+  beginShape(id, options) {
     if (this.reservation !== null) throw new Error("Uncommitted vertices");
     if (!Number.isInteger(id) || id < 0 || id > 0xffffffff)
       throw new RangeError("Invalid shape ID");
     if (this.shapeCount >= 0xffffffff) throw new RangeError("Too many shapes");
-    if ((this.shapeCount + 1) * 3 > this.shapes.length) {
-      const next = this.allocate("uint32", this.shapes.length * 2);
-      next.set(this.shapes);
-      this.shapes = next;
-    }
+    const parsed = this.parseShapeOptions(options);
+    this.ensureShapeCapacity(this.shapeCount + 1);
     const offset = this.shapeCount * 3;
     this.shapes[offset] = id;
     this.shapes[offset + 1] = this.vertexCount;
     this.shapes[offset + 2] = 0;
+    this.writeShapeOptions(this.shapeCount, parsed);
     this.shapeCount++;
   }
 
@@ -214,7 +246,7 @@ class Laser3DBuffer {
     this.shapes[(this.shapeCount - 1) * 3 + 2] += count;
   }
 
-  addStream(input) {
+  addStream(input, options) {
     if (this.reservation !== null) throw new Error("Uncommitted vertices");
     if (!Number.isInteger(input.vertexCount) || input.vertexCount < 0 || input.vertexCount > 0xffffffff ||
         !Number.isInteger(input.shapeCount) || input.shapeCount < 0 || input.shapeCount > 0xffffffff ||
@@ -225,6 +257,7 @@ class Laser3DBuffer {
     const vertices = this.vertexCount + input.vertexCount;
     const shapes = this.shapeCount + input.shapeCount;
     if (vertices > 0xffffffff || shapes > 0xffffffff) throw new RangeError("Stream too large");
+    const parsed = this.parseShapeOptions(options);
     if (this.modes.length < vertices) {
       const size = Math.max(vertices, this.modes.length * 2);
       const modes = this.allocate("uint16", size);
@@ -232,10 +265,7 @@ class Laser3DBuffer {
       modes.set(this.modes); values.set(this.values);
       this.modes = modes; this.values = values;
     }
-    if (this.shapes.length < shapes * 3) {
-      const next = this.allocate("uint32", Math.max(shapes * 3, this.shapes.length * 2));
-      next.set(this.shapes); this.shapes = next;
-    }
+    this.ensureShapeCapacity(shapes);
     this.values.set(input.values.subarray(0, input.vertexCount * 8), this.vertexCount * 8);
     this.modes.set(input.modes.subarray(0, input.vertexCount), this.vertexCount);
     for (let i = 0; i < input.shapeCount; i++) {
@@ -246,6 +276,7 @@ class Laser3DBuffer {
       this.shapes[target] = input.shapes[source];
       this.shapes[target + 1] = start + this.vertexCount;
       this.shapes[target + 2] = length;
+      this.writeShapeOptions(this.shapeCount + i, parsed);
     }
     this.vertexCount = vertices;
     this.shapeCount = shapes;
