@@ -85,6 +85,8 @@ function allocateLaserArray(type, count) {
   throw new TypeError("Invalid buffer type");
 }
 
+const identityMatrix = new Float32Array([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]);
+
 class Laser3DBuffer {
   constructor(allocate = allocateLaserArray) {
     this.allocate = allocate;
@@ -129,8 +131,10 @@ class Laser3DBuffer {
   writeShapeOptions(shape, parsed) {
     const m = shape * 16, c = shape * 4;
     const matrix = parsed === null ? undefined : parsed.matrix, color = parsed === null ? undefined : parsed.color;
-    for (let i = 0; i < 16; i++) this.shapeMatrices[m + i] = matrix === undefined ? (i % 5 === 0 ? 1 : 0) : matrix[i];
-    for (let i = 0; i < 4; i++) this.shapeColors[c + i] = color === undefined ? 1 : color[i];
+    if (matrix === undefined) this.shapeMatrices.set(identityMatrix, m);
+    else for (let i = 0; i < 16; i++) this.shapeMatrices[m + i] = matrix[i];
+    if (color === undefined) this.shapeColors.fill(1, c, c + 4);
+    else for (let i = 0; i < 4; i++) this.shapeColors[c + i] = color[i];
   }
 
   reset() {

@@ -66,11 +66,18 @@ public struct Laser3DBuffer: Sendable, Equatable {
 
     /// Whether any shape has a model matrix other than identity or a tint other than white.
     public var hasShapeAttributes: Bool {
-        for shape in 0..<shapeStorage.count {
-            for i in 0..<16 where matrixStorage[shape * 16 + i] != Self.identityMatrix[i] { return true }
-            for i in 0..<4 where tintStorage[shape * 4 + i] != 1 { return true }
+        let identity = Self.identityMatrix
+        let matrixDiffers = matrixStorage.withUnsafeBufferPointer { matrices in
+            identity.withUnsafeBufferPointer { identity in
+                var offset = 0
+                while offset < matrices.count {
+                    for i in 0..<16 where matrices[offset + i] != identity[i] { return true }
+                    offset += 16
+                }
+                return false
+            }
         }
-        return false
+        return matrixDiffers || tintStorage.contains { $0 != 1 }
     }
 
     public func vertex(at index: Int) -> LaserVertex {
